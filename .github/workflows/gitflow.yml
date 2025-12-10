@@ -1,0 +1,213 @@
+# =============================================================================
+# Gitflow Automation
+# =============================================================================
+# Bu workflow, Gitflow stratejisini otomatize eder:
+# - dev → staging: Otomatik PR oluşturur
+# - staging → main: Otomatik PR oluşturur (release)
+# - Hotfix desteği
+# =============================================================================
+
+name: 🔄 Gitflow Automation
+
+on:
+  push:
+    branches:
+      - dev
+      - staging
+      - 'hotfix/**'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'create-pr'
+        type: choice
+        options:
+          - create-pr
+          - sync-branches
+
+jobs:
+  # ===========================================================================
+  # Dev → Staging PR
+  # ===========================================================================
+  dev-to-staging:
+    name: 📤 Create PR (dev → staging)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git fetch origin staging:staging 2>/dev/null || echo "staging branch may not exist"
+          CHANGES=$(git log staging..dev --oneline 2>/dev/null | wc -l || echo "0")
+          echo "count=$CHANGES" >> $GITHUB_OUTPUT
+          echo "📊 Found $CHANGES new commits in dev"
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.count > 0
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: dev
+          base: staging
+          title: "🔄 [Gitflow] Merge dev into staging"
+          body: |
+            ## 📋 Automatic Gitflow PR
+            
+            Bu PR, **dev** branch'indeki değişiklikleri **staging**'e taşır.
+            
+            ### 📊 Changes
+            - Commits: ${{ steps.changes.outputs.count }} new commit(s)
+            - Source: `dev`
+            - Target: `staging`
+            
+            ### ✅ Checklist
+            - [ ] Code review completed
+            - [ ] Tests passing
+            - [ ] Ready for staging deployment
+            
+            ---
+            🤖 *This PR was automatically created by Gitflow Automation*
+          labels: |
+            gitflow
+            dev-to-staging
+          draft: false
+
+  # ===========================================================================
+  # Staging → Main PR (Release)
+  # ===========================================================================
+  staging-to-main:
+    name: 🚀 Create Release PR (staging → main)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          CHANGES=$(git log origin/main..staging --oneline | wc -l)
+          echo "count=$CHANGES" >> $GITHUB_OUTPUT
+          echo "📊 Found $CHANGES new commits ready for release"
+
+      - name: Generate version
+        id: version
+        run: |
+          # Basit tarih bazlı versiyon
+          VERSION="v$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Version: $VERSION"
+
+      - name: Create Release Pull Request
+        if: steps.changes.outputs.count > 0
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: staging
+          base: main
+          title: "🚀 [Release] ${{ steps.version.outputs.version }}"
+          body: |
+            ## 🚀 Release: ${{ steps.version.outputs.version }}
+            
+            Bu PR, **staging** branch'indeki değişiklikleri **production (main)**'e release eder.
+            
+            ### 📊 Release Info
+            - Version: `${{ steps.version.outputs.version }}`
+            - Commits: ${{ steps.changes.outputs.count }} commit(s)
+            - Source: `staging`
+            - Target: `main` (production)
+            
+            ### ⚠️ Pre-Release Checklist
+            - [ ] All features tested in staging
+            - [ ] No critical bugs in staging
+            - [ ] Database migrations ready (if any)
+            - [ ] Rollback plan documented
+            - [ ] Team notified about release
+            
+            ### 📝 Release Notes
+            <!-- Release notes buraya eklenecek -->
+            
+            ---
+            🤖 *This release PR was automatically created by Gitflow Automation*
+          labels: |
+            gitflow
+            release
+            staging-to-main
+          draft: false
+
+  # ===========================================================================
+  # Hotfix → Main & Dev
+  # ===========================================================================
+  hotfix:
+    name: 🔥 Hotfix PRs
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/hotfix/')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract hotfix name
+        id: hotfix
+        run: |
+          HOTFIX_NAME=${GITHUB_REF#refs/heads/hotfix/}
+          echo "name=$HOTFIX_NAME" >> $GITHUB_OUTPUT
+          echo "🔥 Hotfix: $HOTFIX_NAME"
+
+      - name: Create Hotfix PR to Main
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref_name }}
+          base: main
+          title: "🔥 [Hotfix] ${{ steps.hotfix.outputs.name }} → main"
+          body: |
+            ## 🔥 Hotfix: ${{ steps.hotfix.outputs.name }}
+            
+            **URGENT:** Bu hotfix doğrudan production'a uygulanacak.
+            
+            ### ⚠️ Hotfix Checklist
+            - [ ] Issue identified and documented
+            - [ ] Fix tested locally
+            - [ ] No side effects
+            - [ ] Ready for immediate deployment
+            
+            ---
+            🤖 *This hotfix PR was automatically created*
+          labels: |
+            gitflow
+            hotfix
+            urgent
+          draft: false
+
+      - name: Create Hotfix PR to Dev
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref_name }}
+          base: dev
+          title: "🔥 [Hotfix] ${{ steps.hotfix.outputs.name }} → dev"
+          body: |
+            ## 🔥 Hotfix Backport: ${{ steps.hotfix.outputs.name }}
+            
+            Bu PR, hotfix'i dev branch'ine de uygular.
+            
+            ---
+            🤖 *This hotfix backport PR was automatically created*
+          labels: |
+            gitflow
+            hotfix
+            backport
+          draft: false

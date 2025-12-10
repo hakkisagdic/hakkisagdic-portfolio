@@ -1,0 +1,29 @@
+# Environment files with secrets
+.env
+.env.dev
+.env.staging
+.env.prod
+!.env.example
+
+# Build outputs
+bin/
+obj/
+publish/
+dist/
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets
+*.pem
+*.key

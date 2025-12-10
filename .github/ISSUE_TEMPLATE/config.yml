@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Soru Sor
+    url: https://github.com/hakkisagdic/customer-template/discussions
+    about: Genel sorularınız için Discussions kullanın
+  - name: 📚 Dokümantasyon
+    url: https://github.com/hakkisagdic/customer-template/blob/main/docs/
+    about: Önce dokümantasyona göz atın
