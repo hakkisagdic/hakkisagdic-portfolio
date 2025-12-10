@@ -1,0 +1,238 @@
+name: Setup Customer DNS
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Customer domain (e.g., acme.com)'
+        required: true
+        type: string
+      subdomain:
+        description: 'Subdomain prefix (leave empty for root domain)'
+        required: false
+        type: string
+        default: ''
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: 'dev'
+      record_type:
+        description: 'DNS record type'
+        required: true
+        type: choice
+        options:
+          - A
+          - CNAME
+        default: 'A'
+      proxied:
+        description: 'Enable Cloudflare proxy (orange cloud)'
+        required: true
+        type: boolean
+        default: false
+
+env:
+  DEV_IP: '4.210.90.173'
+  STAGING_IP: '4.210.90.173'  # Update when staging env exists
+  PROD_IP: '4.210.90.173'     # Update when prod env exists
+
+jobs:
+  setup-dns:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine target IP
+        id: target
+        run: |
+          case "${{ inputs.environment }}" in
+            dev)
+              echo "ip=${{ env.DEV_IP }}" >> $GITHUB_OUTPUT
+              ;;
+            staging)
+              echo "ip=${{ env.STAGING_IP }}" >> $GITHUB_OUTPUT
+              ;;
+            prod)
+              echo "ip=${{ env.PROD_IP }}" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Get Cloudflare Zone ID
+        id: zone
+        env:
+          CF_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CF_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+        run: |
+          ZONE_ID=$(curl -sf --max-time 30 "https://api.cloudflare.com/client/v4/zones?name=${{ inputs.domain }}" \
+            -H "X-Auth-Email: $CF_EMAIL" \
+            -H "X-Auth-Key: $CF_API_KEY" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          
+          if [ -z "$ZONE_ID" ]; then
+            echo "❌ Zone not found for domain: ${{ inputs.domain }}"
+            echo "Make sure the domain is added to your Cloudflare account"
+            exit 1
+          fi
+          
+          echo "zone_id=$ZONE_ID" >> $GITHUB_OUTPUT
+          echo "✅ Found Zone ID: $ZONE_ID"
+
+      - name: Determine record name
+        id: record
+        run: |
+          if [ -z "${{ inputs.subdomain }}" ]; then
+            echo "name=@" >> $GITHUB_OUTPUT
+            echo "display=${{ inputs.domain }}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${{ inputs.subdomain }}" >> $GITHUB_OUTPUT
+            echo "display=${{ inputs.subdomain }}.${{ inputs.domain }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check existing DNS record
+        id: existing
+        env:
+          CF_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CF_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+        run: |
+          EXISTING=$(curl -sf --max-time 30 "https://api.cloudflare.com/client/v4/zones/${{ steps.zone.outputs.zone_id }}/dns_records?name=${{ steps.record.outputs.display }}" \
+            -H "X-Auth-Email: $CF_EMAIL" \
+            -H "X-Auth-Key: $CF_API_KEY" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          
+          if [ -n "$EXISTING" ]; then
+            echo "record_id=$EXISTING" >> $GITHUB_OUTPUT
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Existing record found: $EXISTING (will be updated)"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ No existing record found (will be created)"
+          fi
+
+      - name: Create DNS record
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          CF_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CF_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+        run: |
+          RESPONSE=$(curl -sf --max-time 30 -X POST \
+            "https://api.cloudflare.com/client/v4/zones/${{ steps.zone.outputs.zone_id }}/dns_records" \
+            -H "X-Auth-Email: $CF_EMAIL" \
+            -H "X-Auth-Key: $CF_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "type": "${{ inputs.record_type }}",
+              "name": "${{ steps.record.outputs.name }}",
+              "content": "${{ steps.target.outputs.ip }}",
+              "ttl": 1,
+              "proxied": ${{ inputs.proxied }}
+            }')
+          
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+          if [ "$SUCCESS" = "true" ]; then
+            echo "✅ DNS record created successfully!"
+            echo "   Type: ${{ inputs.record_type }}"
+            echo "   Name: ${{ steps.record.outputs.display }}"
+            echo "   Content: ${{ steps.target.outputs.ip }}"
+            echo "   Proxied: ${{ inputs.proxied }}"
+          else
+            echo "❌ Failed to create DNS record"
+            echo "$RESPONSE" | jq '.errors'
+            exit 1
+          fi
+
+      - name: Update DNS record
+        if: steps.existing.outputs.exists == 'true'
+        env:
+          CF_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CF_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+        run: |
+          RESPONSE=$(curl -sf --max-time 30 -X PUT \
+            "https://api.cloudflare.com/client/v4/zones/${{ steps.zone.outputs.zone_id }}/dns_records/${{ steps.existing.outputs.record_id }}" \
+            -H "X-Auth-Email: $CF_EMAIL" \
+            -H "X-Auth-Key: $CF_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "type": "${{ inputs.record_type }}",
+              "name": "${{ steps.record.outputs.name }}",
+              "content": "${{ steps.target.outputs.ip }}",
+              "ttl": 1,
+              "proxied": ${{ inputs.proxied }}
+            }')
+          
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+          if [ "$SUCCESS" = "true" ]; then
+            echo "✅ DNS record updated successfully!"
+            echo "   Type: ${{ inputs.record_type }}"
+            echo "   Name: ${{ steps.record.outputs.display }}"
+            echo "   Content: ${{ steps.target.outputs.ip }}"
+            echo "   Proxied: ${{ inputs.proxied }}"
+          else
+            echo "❌ Failed to update DNS record"
+            echo "$RESPONSE" | jq '.errors'
+            exit 1
+          fi
+
+      - name: Create www subdomain (for root domain only)
+        if: inputs.subdomain == '' && inputs.record_type == 'A'
+        env:
+          CF_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CF_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+        run: |
+          # Check if www record exists
+          EXISTING=$(curl -sf --max-time 30 "https://api.cloudflare.com/client/v4/zones/${{ steps.zone.outputs.zone_id }}/dns_records?name=www.${{ inputs.domain }}" \
+            -H "X-Auth-Email: $CF_EMAIL" \
+            -H "X-Auth-Key: $CF_API_KEY" \
+            -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          
+          if [ -n "$EXISTING" ]; then
+            # Update existing
+            curl -sf --max-time 30 -X PUT \
+              "https://api.cloudflare.com/client/v4/zones/${{ steps.zone.outputs.zone_id }}/dns_records/$EXISTING" \
+              -H "X-Auth-Email: $CF_EMAIL" \
+              -H "X-Auth-Key: $CF_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data '{
+                "type": "A",
+                "name": "www",
+                "content": "${{ steps.target.outputs.ip }}",
+                "ttl": 1,
+                "proxied": ${{ inputs.proxied }}
+              }'
+            echo "✅ www.${{ inputs.domain }} updated"
+          else
+            # Create new
+            curl -sf --max-time 30 -X POST \
+              "https://api.cloudflare.com/client/v4/zones/${{ steps.zone.outputs.zone_id }}/dns_records" \
+              -H "X-Auth-Email: $CF_EMAIL" \
+              -H "X-Auth-Key: $CF_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data '{
+                "type": "A",
+                "name": "www",
+                "content": "${{ steps.target.outputs.ip }}",
+                "ttl": 1,
+                "proxied": ${{ inputs.proxied }}
+              }'
+            echo "✅ www.${{ inputs.domain }} created"
+          fi
+
+      - name: Summary
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════════════════════"
+          echo "🌐 DNS Setup Complete!"
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "Domain:      ${{ steps.record.outputs.display }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Target IP:   ${{ steps.target.outputs.ip }}"
+          echo "Record Type: ${{ inputs.record_type }}"
+          echo "Proxied:     ${{ inputs.proxied }}"
+          echo ""
+          echo "⏳ DNS propagation may take up to 5 minutes"
+          echo "🔒 SSL certificate will be auto-generated by Traefik"
+          echo ""
+          echo "Test with: curl -I https://${{ steps.record.outputs.display }}"
+          echo "═══════════════════════════════════════════════════════════"
