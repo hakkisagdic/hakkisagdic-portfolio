@@ -81,7 +81,8 @@ jobs:
             VERSION="${{ needs.build.outputs.version }}"
             
             # Create directory if not exists
-            mkdir -p "$DEPLOY_DIR"
+            sudo mkdir -p "$DEPLOY_DIR"
+            sudo chown $USER:$USER "$DEPLOY_DIR"
             
             # Copy docker-compose.yml from temp location
             cp "/tmp/${{ env.CUSTOMER_NAME }}/docker-compose.yml" "$DEPLOY_DIR/docker-compose.yml"
@@ -154,7 +155,8 @@ jobs:
             DEPLOY_DIR="/opt/swarm/customers/${{ env.CUSTOMER_NAME }}"
             VERSION="${{ needs.build.outputs.version }}"
             
-            mkdir -p "$DEPLOY_DIR"
+            sudo mkdir -p "$DEPLOY_DIR"
+            sudo chown $USER:$USER "$DEPLOY_DIR"
             cp "/tmp/${{ env.CUSTOMER_NAME }}/docker-compose.yml" "$DEPLOY_DIR/docker-compose.yml"
             rm -rf "/tmp/${{ env.CUSTOMER_NAME }}"
             
@@ -210,7 +212,8 @@ jobs:
             DEPLOY_DIR="/opt/swarm/customers/${{ env.CUSTOMER_NAME }}"
             VERSION="${{ needs.build.outputs.version }}"
             
-            mkdir -p "$DEPLOY_DIR"
+            sudo mkdir -p "$DEPLOY_DIR"
+            sudo chown $USER:$USER "$DEPLOY_DIR"
             cp "/tmp/${{ env.CUSTOMER_NAME }}/docker-compose.yml" "$DEPLOY_DIR/docker-compose.yml"
             rm -rf "/tmp/${{ env.CUSTOMER_NAME }}"
             
