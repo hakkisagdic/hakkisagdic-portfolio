@@ -1,0 +1,346 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   CYBERPUNK PORTFOLIO - Global Styles
+   ============================================================================ */
+
+@layer base {
+  :root {
+    /* Colors */
+    --color-bg: #0a0a0f;
+    --color-surface: #0f0f1a;
+    --color-primary: #00f0ff;
+    --color-accent: #f000ff;
+    --color-secondary: #7000ff;
+    --color-text: #f0f0ff;
+    --color-muted: #b0b0d0;
+    
+    /* Glow effects */
+    --glow-primary: 0 0 5px #00f0ff, 0 0 20px rgba(0, 240, 255, 0.5);
+    --glow-accent: 0 0 5px #f000ff, 0 0 20px rgba(240, 0, 255, 0.5);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-text antialiased;
+    font-family: var(--font-rajdhani), system-ui, sans-serif;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-surface;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary/30 rounded-full;
+    border: 2px solid transparent;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary/50;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-primary/30 text-primary;
+  }
+}
+
+@layer components {
+  /* ========================================================================
+     NEON EFFECTS
+     ======================================================================== */
+  
+  .neon-text {
+    text-shadow: 
+      0 0 5px currentColor,
+      0 0 10px currentColor,
+      0 0 20px currentColor,
+      0 0 40px currentColor;
+  }
+
+  .neon-border {
+    box-shadow: 
+      0 0 5px var(--color-primary),
+      0 0 10px var(--color-primary),
+      inset 0 0 5px rgba(0, 240, 255, 0.1);
+    border: 1px solid var(--color-primary);
+  }
+
+  .neon-border-accent {
+    box-shadow: 
+      0 0 5px var(--color-accent),
+      0 0 10px var(--color-accent),
+      inset 0 0 5px rgba(240, 0, 255, 0.1);
+    border: 1px solid var(--color-accent);
+  }
+
+  /* ========================================================================
+     GLITCH EFFECT
+     ======================================================================== */
+  
+  .glitch {
+    position: relative;
+  }
+
+  .glitch::before,
+  .glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .glitch::before {
+    left: 2px;
+    text-shadow: -2px 0 var(--color-accent);
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 5s infinite linear alternate-reverse;
+  }
+
+  .glitch::after {
+    left: -2px;
+    text-shadow: -2px 0 var(--color-primary);
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim2 5s infinite linear alternate-reverse;
+  }
+
+  @keyframes glitch-anim {
+    0% { clip: rect(31px, 9999px, 94px, 0); }
+    5% { clip: rect(70px, 9999px, 71px, 0); }
+    10% { clip: rect(29px, 9999px, 24px, 0); }
+    15% { clip: rect(69px, 9999px, 64px, 0); }
+    20% { clip: rect(21px, 9999px, 79px, 0); }
+    25% { clip: rect(32px, 9999px, 91px, 0); }
+    30% { clip: rect(16px, 9999px, 13px, 0); }
+    35% { clip: rect(97px, 9999px, 53px, 0); }
+    40% { clip: rect(52px, 9999px, 31px, 0); }
+    45% { clip: rect(13px, 9999px, 4px, 0); }
+    50% { clip: rect(38px, 9999px, 99px, 0); }
+    55% { clip: rect(91px, 9999px, 23px, 0); }
+    60% { clip: rect(69px, 9999px, 14px, 0); }
+    65% { clip: rect(43px, 9999px, 33px, 0); }
+    70% { clip: rect(63px, 9999px, 73px, 0); }
+    75% { clip: rect(19px, 9999px, 80px, 0); }
+    80% { clip: rect(47px, 9999px, 59px, 0); }
+    85% { clip: rect(58px, 9999px, 87px, 0); }
+    90% { clip: rect(82px, 9999px, 68px, 0); }
+    95% { clip: rect(39px, 9999px, 11px, 0); }
+    100% { clip: rect(67px, 9999px, 46px, 0); }
+  }
+
+  @keyframes glitch-anim2 {
+    0% { clip: rect(65px, 9999px, 100px, 0); }
+    5% { clip: rect(52px, 9999px, 74px, 0); }
+    10% { clip: rect(79px, 9999px, 85px, 0); }
+    15% { clip: rect(75px, 9999px, 5px, 0); }
+    20% { clip: rect(67px, 9999px, 61px, 0); }
+    25% { clip: rect(14px, 9999px, 79px, 0); }
+    30% { clip: rect(1px, 9999px, 66px, 0); }
+    35% { clip: rect(86px, 9999px, 30px, 0); }
+    40% { clip: rect(23px, 9999px, 98px, 0); }
+    45% { clip: rect(85px, 9999px, 72px, 0); }
+    50% { clip: rect(71px, 9999px, 75px, 0); }
+    55% { clip: rect(2px, 9999px, 48px, 0); }
+    60% { clip: rect(30px, 9999px, 16px, 0); }
+    65% { clip: rect(59px, 9999px, 50px, 0); }
+    70% { clip: rect(41px, 9999px, 62px, 0); }
+    75% { clip: rect(2px, 9999px, 82px, 0); }
+    80% { clip: rect(47px, 9999px, 73px, 0); }
+    85% { clip: rect(3px, 9999px, 27px, 0); }
+    90% { clip: rect(26px, 9999px, 55px, 0); }
+    95% { clip: rect(42px, 9999px, 25px, 0); }
+    100% { clip: rect(38px, 9999px, 45px, 0); }
+  }
+
+  /* ========================================================================
+     SCANLINES OVERLAY
+     ======================================================================== */
+  
+  .scanlines {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanlines::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.15),
+      rgba(0, 0, 0, 0.15) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ========================================================================
+     CYBER GRID BACKGROUND
+     ======================================================================== */
+  
+  .cyber-grid {
+    background-image: 
+      linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  .cyber-grid-dense {
+    background-image: 
+      linear-gradient(rgba(0, 240, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 240, 255, 0.05) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* ========================================================================
+     CARD STYLES
+     ======================================================================== */
+  
+  .cyber-card {
+    @apply bg-surface/80 backdrop-blur-sm border border-primary/20 rounded-lg;
+    transition: all 0.3s ease;
+  }
+
+  .cyber-card:hover {
+    @apply border-primary/50;
+    box-shadow: 
+      0 0 20px rgba(0, 240, 255, 0.1),
+      inset 0 0 20px rgba(0, 240, 255, 0.05);
+  }
+
+  /* ========================================================================
+     BUTTON STYLES
+     ======================================================================== */
+  
+  .cyber-button {
+    @apply relative px-6 py-3 font-heading uppercase tracking-wider;
+    @apply bg-transparent border border-primary text-primary;
+    @apply transition-all duration-300;
+    clip-path: polygon(
+      0 0,
+      calc(100% - 10px) 0,
+      100% 10px,
+      100% 100%,
+      10px 100%,
+      0 calc(100% - 10px)
+    );
+  }
+
+  .cyber-button::before {
+    content: "";
+    @apply absolute inset-0 bg-primary/10;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+  }
+
+  .cyber-button:hover::before {
+    transform: scaleX(1);
+  }
+
+  .cyber-button:hover {
+    box-shadow: var(--glow-primary);
+    text-shadow: 0 0 10px var(--color-primary);
+  }
+
+  .cyber-button-accent {
+    @apply border-accent text-accent;
+  }
+
+  .cyber-button-accent:hover {
+    box-shadow: var(--glow-accent);
+    text-shadow: 0 0 10px var(--color-accent);
+  }
+
+  /* ========================================================================
+     INPUT STYLES
+     ======================================================================== */
+  
+  .cyber-input {
+    @apply w-full px-4 py-3 bg-surface border border-primary/30 rounded;
+    @apply text-text placeholder:text-muted;
+    @apply focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50;
+    @apply transition-all duration-300;
+  }
+
+  .cyber-input:focus {
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+  }
+
+  /* ========================================================================
+     TYPOGRAPHY
+     ======================================================================== */
+  
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  }
+
+  .text-gradient-animated {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(90deg, var(--color-primary), var(--color-accent), var(--color-primary));
+    background-size: 200% auto;
+    animation: gradient 3s linear infinite;
+  }
+
+  /* ========================================================================
+     TIMELINE
+     ======================================================================== */
+  
+  .timeline-line {
+    @apply absolute left-0 top-0 bottom-0 w-px;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--color-primary) 10%,
+      var(--color-primary) 90%,
+      transparent
+    );
+  }
+
+  .timeline-dot {
+    @apply absolute left-0 w-3 h-3 rounded-full bg-primary;
+    @apply transform -translate-x-1/2;
+    box-shadow: 0 0 10px var(--color-primary);
+  }
+}
+
+@layer utilities {
+  .text-shadow-glow {
+    text-shadow: 0 0 10px currentColor, 0 0 20px currentColor;
+  }
+
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+
+  .backface-hidden {
+    backface-visibility: hidden;
+  }
+}

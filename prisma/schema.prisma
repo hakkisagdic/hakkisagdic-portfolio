@@ -1,0 +1,163 @@
+// Prisma Schema - Portfolio Application
+// PostgreSQL database for customer portfolio sites
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER & AUTH
+// ============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // bcrypt hashed
+  name      String?
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// PROFILE
+// ============================================================================
+
+model Profile {
+  id        String   @id @default(cuid())
+  name      String
+  headline  String?
+  summary   String?  @db.Text
+  photo     String?
+  location  String?
+  email     String?
+  phone     String?
+  linkedin  String?
+  github    String?
+  twitter   String?
+  website   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// EXPERIENCE
+// ============================================================================
+
+model Experience {
+  id          String    @id @default(cuid())
+  title       String
+  company     String
+  logo        String?
+  location    String?
+  startDate   DateTime
+  endDate     DateTime?
+  current     Boolean   @default(false)
+  description String?   @db.Text
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ============================================================================
+// EDUCATION
+// ============================================================================
+
+model Education {
+  id          String    @id @default(cuid())
+  school      String
+  degree      String
+  field       String?
+  startDate   DateTime
+  endDate     DateTime?
+  description String?   @db.Text
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ============================================================================
+// SKILLS
+// ============================================================================
+
+model Skill {
+  id       String @id @default(cuid())
+  name     String
+  category String // "Languages", "Frameworks", "DevOps", "Cloud", "Tools"
+  level    Int    @default(80) // 0-100
+  icon     String?
+  order    Int    @default(0)
+}
+
+// ============================================================================
+// CERTIFICATIONS
+// ============================================================================
+
+model Certification {
+  id           String    @id @default(cuid())
+  name         String
+  issuer       String
+  issueDate    DateTime
+  expireDate   DateTime?
+  credentialId String?
+  url          String?
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ============================================================================
+// PROJECTS
+// ============================================================================
+
+model Project {
+  id          String   @id @default(cuid())
+  title       String
+  description String?  @db.Text
+  image       String?
+  url         String?
+  github      String?
+  tags        String[] // PostgreSQL array
+  featured    Boolean  @default(false)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============================================================================
+// CONTACT MESSAGES
+// ============================================================================
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  subject   String?
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  replied   Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ============================================================================
+// SITE SETTINGS
+// ============================================================================
+
+model Settings {
+  id              String  @id @default(cuid())
+  siteTitle       String  @default("Portfolio")
+  siteDescription String?
+  theme           String  @default("cyberpunk") // cyberpunk, minimal, neon
+  primaryColor    String  @default("#00f0ff")
+  accentColor     String  @default("#f000ff")
+  showParticles   Boolean @default(true)
+  showGrid        Boolean @default(true)
+  showScanlines   Boolean @default(true)
+  particleCount   Int     @default(100)
+  animationSpeed  Float   @default(1.0)
+}

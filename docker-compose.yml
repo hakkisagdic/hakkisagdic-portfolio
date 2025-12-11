@@ -1,56 +1,60 @@
 version: "3.8"
 
 services:
-  app:
-    image: ${ACR_URL}/${CUSTOMER_NAME}/app:${VERSION:-latest}
+  portfolio:
+    image: ${ACR_NAME}.azurecr.io/${CUSTOMER_NAME}:${IMAGE_TAG:-latest}
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
-      - ASPNETCORE_ENVIRONMENT=${ENVIRONMENT:-Production}
-      - ASPNETCORE_URLS=http://+:80
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://portfolio:${DB_PASSWORD}@db:5432/portfolio
+      - NEXTAUTH_URL=https://${DOMAIN}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
     networks:
-      - customer-internal
       - traefik-public
+      - internal
     deploy:
       mode: replicated
-      replicas: ${APP_REPLICAS:-1}
+      replicas: 1
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.${CUSTOMER_NAME}-app.rule=Host(`${APP_DOMAIN}`)"
-        - "traefik.http.routers.${CUSTOMER_NAME}-app.entrypoints=websecure"
-        - "traefik.http.routers.${CUSTOMER_NAME}-app.tls.certresolver=letsencrypt"
-        - "traefik.http.services.${CUSTOMER_NAME}-app.loadbalancer.server.port=80"
-        - "traefik.docker.network=traefik-public"
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        order: start-first
+        - "traefik.http.routers.${CUSTOMER_NAME}.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+        - "traefik.http.routers.${CUSTOMER_NAME}.entrypoints=websecure"
+        - "traefik.http.routers.${CUSTOMER_NAME}.tls.certresolver=letsencrypt"
+        - "traefik.http.services.${CUSTOMER_NAME}.loadbalancer.server.port=3000"
+        # Redirect www to non-www
+        - "traefik.http.middlewares.${CUSTOMER_NAME}-redirect.redirectregex.regex=^https://www\\.(.*)"
+        - "traefik.http.middlewares.${CUSTOMER_NAME}-redirect.redirectregex.replacement=https://$${1}"
+        - "traefik.http.middlewares.${CUSTOMER_NAME}-redirect.redirectregex.permanent=true"
+        - "traefik.http.routers.${CUSTOMER_NAME}.middlewares=${CUSTOMER_NAME}-redirect"
       resources:
         limits:
-          cpus: '${APP_CPU_LIMIT:-1}'
-          memory: ${APP_MEMORY_LIMIT:-1G}
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: '${APP_CPU_RESERVE:-0.25}'
-          memory: ${APP_MEMORY_RESERVE:-256M}
+          cpus: "0.25"
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    depends_on:
+      - db
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
   db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
-      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=portfolio
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=portfolio
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
-      - customer-internal
-    secrets:
-      - db_password
+      - internal
     deploy:
       mode: replicated
       replicas: 1
@@ -59,37 +63,19 @@ services:
           - node.role == manager
       resources:
         limits:
-          cpus: '${DB_CPU_LIMIT:-1}'
-          memory: ${DB_MEMORY_LIMIT:-1G}
+          cpus: "0.5"
+          memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # redis:
-  #   image: redis:7-alpine
-  #   command: redis-server --appendonly yes
-  #   volumes:
-  #     - redis-data:/data
-  #   networks:
-  #     - customer-internal
-  #   deploy:
-  #     replicas: 1
+      test: ["CMD-SHELL", "pg_isready -U portfolio"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
-  customer-internal:
-    driver: overlay
-    internal: true
-    name: ${CUSTOMER_NAME}-internal
   traefik-public:
     external: true
+  internal:
+    driver: overlay
 
 volumes:
-  db-data:
-    name: ${CUSTOMER_NAME}-db-data
-
-secrets:
-  db_password:
-    external: true
-    name: ${CUSTOMER_NAME}-db-password
+  postgres_data:
