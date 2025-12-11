@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   portfolio:
-    image: ${ACR_NAME}.azurecr.io/${CUSTOMER_NAME}:${IMAGE_TAG:-latest}
+    image: ${ACR_NAME}.azurecr.io/${CUSTOMER_NAME}/app:${VERSION:-latest}
     environment:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://portfolio:${DB_PASSWORD}@db:5432/portfolio
