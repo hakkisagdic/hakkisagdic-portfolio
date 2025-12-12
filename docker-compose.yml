@@ -13,7 +13,7 @@ services:
       - internal
     deploy:
       mode: replicated
-      replicas: 1
+      replicas: ${REPLICAS:-1}
       labels:
         - "traefik.enable=true"
         # Main router - uses DOMAIN directly (dev.domain / stg.domain / domain)
@@ -21,6 +21,11 @@ services:
         - "traefik.http.routers.${CUSTOMER_NAME}.entrypoints=websecure"
         - "traefik.http.routers.${CUSTOMER_NAME}.tls.certresolver=letsencrypt"
         - "traefik.http.services.${CUSTOMER_NAME}.loadbalancer.server.port=3000"
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
       resources:
         limits:
           cpus: "0.5"
