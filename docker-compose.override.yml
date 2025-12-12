@@ -1,0 +1,35 @@
+# Local development override
+services:
+  portfolio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hakkisagdic-portfolio:local
+    ports:
+      - "3000:3000"
+    networks:
+      - internal
+    environment:
+      - DATABASE_URL=postgresql://portfolio:localpass123@db:5432/portfolio
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=localsecret123456789012345678901234567890
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    networks:
+      - internal
+    environment:
+      - POSTGRES_PASSWORD=localpass123
+
+networks:
+  internal:
+    driver: bridge
+  traefik-public:
+    driver: bridge
