@@ -16,15 +16,11 @@ services:
       replicas: 1
       labels:
         - "traefik.enable=true"
-        - "traefik.http.routers.${CUSTOMER_NAME}.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)"
+        # Main router - uses DOMAIN directly (dev.domain / stg.domain / domain)
+        - "traefik.http.routers.${CUSTOMER_NAME}.rule=Host(`${DOMAIN}`)"
         - "traefik.http.routers.${CUSTOMER_NAME}.entrypoints=websecure"
         - "traefik.http.routers.${CUSTOMER_NAME}.tls.certresolver=letsencrypt"
         - "traefik.http.services.${CUSTOMER_NAME}.loadbalancer.server.port=3000"
-        # Redirect www to non-www
-        - "traefik.http.middlewares.${CUSTOMER_NAME}-redirect.redirectregex.regex=^https://www\\.(.*)"
-        - "traefik.http.middlewares.${CUSTOMER_NAME}-redirect.redirectregex.replacement=https://$${1}"
-        - "traefik.http.middlewares.${CUSTOMER_NAME}-redirect.redirectregex.permanent=true"
-        - "traefik.http.routers.${CUSTOMER_NAME}.middlewares=${CUSTOMER_NAME}-redirect"
       resources:
         limits:
           cpus: "0.5"
