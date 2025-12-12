@@ -1,10 +1,17 @@
 # =============================================================================
-# Gitflow Automation
+# Gitflow Automation with Draft PRs
 # =============================================================================
 # Bu workflow, Gitflow stratejisini otomatize eder:
-# - dev → staging: Otomatik PR oluşturur
-# - staging → main: Otomatik PR oluşturur (release)
+# - dev → staging: Draft PR oluşturur/günceller
+# - staging → main: Draft PR oluşturur/günceller (release)
 # - Hotfix desteği
+#
+# 📌 Akış:
+# 1. dev'e push → Draft PR (dev→staging) açılır
+# 2. dev'e yeni push'lar → Aynı PR otomatik güncellenir
+# 3. PR'ı "Ready for review" yap → Merge et → STAGING deploy
+# 4. staging merge → Draft PR (staging→main) açılır
+# 5. PR'ı "Ready for review" yap → Merge et → PROD deploy
 # =============================================================================
 
 name: 🔄 Gitflow Automation
@@ -28,10 +35,10 @@ on:
 
 jobs:
   # ===========================================================================
-  # Dev → Staging PR
+  # Dev → Staging Draft PR
   # ===========================================================================
   dev-to-staging:
-    name: 📤 Create PR (dev → staging)
+    name: 📤 Draft PR (dev → staging)
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/dev'
     
@@ -46,44 +53,144 @@ jobs:
         run: |
           git fetch origin staging:staging 2>/dev/null || echo "staging branch may not exist"
           CHANGES=$(git log staging..dev --oneline 2>/dev/null | wc -l || echo "0")
+          COMMIT_LIST=$(git log staging..dev --oneline 2>/dev/null | head -20 || echo "")
           echo "count=$CHANGES" >> $GITHUB_OUTPUT
           echo "📊 Found $CHANGES new commits in dev"
+          
+          # Store commit list for PR body
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "commits<<$EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_LIST" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
 
-      - name: Create Pull Request
-        if: steps.changes.outputs.count > 0
-        uses: peter-evans/create-pull-request@v6
+      - name: Check existing PR
+        id: existing_pr
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: dev
-          base: staging
-          title: "🔄 [Gitflow] Merge dev into staging"
-          body: |
-            ## 📋 Automatic Gitflow PR
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:dev`,
+              base: 'staging',
+              state: 'open'
+            });
             
-            Bu PR, **dev** branch'indeki değişiklikleri **staging**'e taşır.
-            
-            ### 📊 Changes
-            - Commits: ${{ steps.changes.outputs.count }} new commit(s)
-            - Source: `dev`
-            - Target: `staging`
-            
-            ### ✅ Checklist
-            - [ ] Code review completed
-            - [ ] Tests passing
-            - [ ] Ready for staging deployment
-            
+            if (prs.length > 0) {
+              console.log(`Found existing PR #${prs[0].number}`);
+              core.setOutput('exists', 'true');
+              core.setOutput('number', prs[0].number);
+            } else {
+              console.log('No existing PR found');
+              core.setOutput('exists', 'false');
+            }
+
+      - name: Create Draft PR
+        if: steps.changes.outputs.count > 0 && steps.existing_pr.outputs.exists == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔄 [Draft] dev → staging',
+              head: 'dev',
+              base: 'staging',
+              draft: true,
+              body: `## 📋 Gitflow: dev → staging
+
+            Bu Draft PR, **dev** branch'indeki değişiklikleri **staging**'e taşır.
+
+            ### 📊 Değişiklikler
+            - Toplam: ${{ steps.changes.outputs.count }} commit
+            - Kaynak: \`dev\`
+            - Hedef: \`staging\`
+
+            ### 📝 Son Commitler
+            \`\`\`
+            ${{ steps.changes.outputs.commits }}
+            \`\`\`
+
+            ### ✅ Merge Öncesi Checklist
+            - [ ] Kod review tamamlandı
+            - [ ] Testler geçiyor
+            - [ ] STAGING'e deploy için hazır
+
+            ### 🚀 Sonraki Adım
+            1. Bu PR'ı "Ready for review" yap
+            2. Review ve onay al
+            3. Merge et → Otomatik STAGING deploy
+
             ---
-            🤖 *This PR was automatically created by Gitflow Automation*
-          labels: |
-            gitflow
-            dev-to-staging
-          draft: false
+            🤖 *Bu PR otomatik oluşturuldu. dev'e yeni push'lar bu PR'ı günceller.*
+            `
+            });
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['gitflow', 'dev-to-staging', 'draft']
+            });
+            
+            console.log(`Created Draft PR #${pr.number}`);
+
+      - name: Update existing PR
+        if: steps.changes.outputs.count > 0 && steps.existing_pr.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.existing_pr.outputs.number }};
+            
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              body: `## 📋 Gitflow: dev → staging
+
+            Bu Draft PR, **dev** branch'indeki değişiklikleri **staging**'e taşır.
+
+            ### 📊 Değişiklikler (Güncellendi ✨)
+            - Toplam: ${{ steps.changes.outputs.count }} commit
+            - Kaynak: \`dev\`
+            - Hedef: \`staging\`
+            - Son güncelleme: ${new Date().toISOString()}
+
+            ### 📝 Son Commitler
+            \`\`\`
+            ${{ steps.changes.outputs.commits }}
+            \`\`\`
+
+            ### ✅ Merge Öncesi Checklist
+            - [ ] Kod review tamamlandı
+            - [ ] Testler geçiyor
+            - [ ] STAGING'e deploy için hazır
+
+            ### 🚀 Sonraki Adım
+            1. Bu PR'ı "Ready for review" yap
+            2. Review ve onay al
+            3. Merge et → Otomatik STAGING deploy
+
+            ---
+            🤖 *Bu PR otomatik güncellendi. Son push: ${context.sha.substring(0, 8)}*
+            `
+            });
+            
+            // Add comment about update
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🔄 **PR Güncellendi**\n\nYeni commit eklendi: \`${context.sha.substring(0, 8)}\`\n\nToplam: ${{ steps.changes.outputs.count }} commit staging'e merge bekliyor.`
+            });
+            
+            console.log(`Updated PR #${prNumber}`);
 
   # ===========================================================================
-  # Staging → Main PR (Release)
+  # Staging → Main Draft PR (Release)
   # ===========================================================================
   staging-to-main:
-    name: 🚀 Create Release PR (staging → main)
+    name: 🚀 Draft Release PR (staging → main)
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/staging'
     
@@ -97,53 +204,150 @@ jobs:
         id: changes
         run: |
           CHANGES=$(git log origin/main..staging --oneline | wc -l)
+          COMMIT_LIST=$(git log origin/main..staging --oneline | head -20 || echo "")
           echo "count=$CHANGES" >> $GITHUB_OUTPUT
           echo "📊 Found $CHANGES new commits ready for release"
+          
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "commits<<$EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_LIST" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
 
       - name: Generate version
         id: version
         run: |
-          # Basit tarih bazlı versiyon
           VERSION="v$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Version: $VERSION"
 
-      - name: Create Release Pull Request
-        if: steps.changes.outputs.count > 0
-        uses: peter-evans/create-pull-request@v6
+      - name: Check existing PR
+        id: existing_pr
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: staging
-          base: main
-          title: "🚀 [Release] ${{ steps.version.outputs.version }}"
-          body: |
-            ## 🚀 Release: ${{ steps.version.outputs.version }}
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:staging`,
+              base: 'main',
+              state: 'open'
+            });
             
-            Bu PR, **staging** branch'indeki değişiklikleri **production (main)**'e release eder.
-            
-            ### 📊 Release Info
-            - Version: `${{ steps.version.outputs.version }}`
-            - Commits: ${{ steps.changes.outputs.count }} commit(s)
-            - Source: `staging`
-            - Target: `main` (production)
-            
+            if (prs.length > 0) {
+              console.log(`Found existing PR #${prs[0].number}`);
+              core.setOutput('exists', 'true');
+              core.setOutput('number', prs[0].number);
+            } else {
+              console.log('No existing PR found');
+              core.setOutput('exists', 'false');
+            }
+
+      - name: Create Draft Release PR
+        if: steps.changes.outputs.count > 0 && steps.existing_pr.outputs.exists == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚀 [Release Draft] ${{ steps.version.outputs.version }}',
+              head: 'staging',
+              base: 'main',
+              draft: true,
+              body: `## 🚀 Release: ${{ steps.version.outputs.version }}
+
+            Bu Draft PR, **staging** branch'indeki değişiklikleri **production (main)**'e release eder.
+
+            ### 📊 Release Bilgisi
+            - Version: \`${{ steps.version.outputs.version }}\`
+            - Toplam: ${{ steps.changes.outputs.count }} commit
+            - Kaynak: \`staging\`
+            - Hedef: \`main\` (production)
+
+            ### 📝 Değişiklikler
+            \`\`\`
+            ${{ steps.changes.outputs.commits }}
+            \`\`\`
+
             ### ⚠️ Pre-Release Checklist
-            - [ ] All features tested in staging
-            - [ ] No critical bugs in staging
-            - [ ] Database migrations ready (if any)
-            - [ ] Rollback plan documented
-            - [ ] Team notified about release
-            
-            ### 📝 Release Notes
-            <!-- Release notes buraya eklenecek -->
-            
+            - [ ] Tüm özellikler staging'de test edildi
+            - [ ] Kritik bug yok
+            - [ ] Database migration hazır (varsa)
+            - [ ] Rollback planı hazır
+            - [ ] Takım bilgilendirildi
+
+            ### 🚀 Sonraki Adım
+            1. Bu PR'ı "Ready for review" yap
+            2. Final review ve onay al
+            3. Merge et → Otomatik PROD deploy (2 replica)
+
             ---
-            🤖 *This release PR was automatically created by Gitflow Automation*
-          labels: |
-            gitflow
-            release
-            staging-to-main
-          draft: false
+            🤖 *Bu release PR otomatik oluşturuldu.*
+            `
+            });
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['gitflow', 'release', 'staging-to-main', 'draft']
+            });
+            
+            console.log(`Created Draft Release PR #${pr.number}`);
+
+      - name: Update existing Release PR
+        if: steps.changes.outputs.count > 0 && steps.existing_pr.outputs.exists == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = ${{ steps.existing_pr.outputs.number }};
+            
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+              title: '🚀 [Release Draft] ${{ steps.version.outputs.version }}',
+              body: `## 🚀 Release: ${{ steps.version.outputs.version }}
+
+            Bu Draft PR, **staging** branch'indeki değişiklikleri **production (main)**'e release eder.
+
+            ### 📊 Release Bilgisi (Güncellendi ✨)
+            - Version: \`${{ steps.version.outputs.version }}\`
+            - Toplam: ${{ steps.changes.outputs.count }} commit
+            - Kaynak: \`staging\`
+            - Hedef: \`main\` (production)
+            - Son güncelleme: ${new Date().toISOString()}
+
+            ### 📝 Değişiklikler
+            \`\`\`
+            ${{ steps.changes.outputs.commits }}
+            \`\`\`
+
+            ### ⚠️ Pre-Release Checklist
+            - [ ] Tüm özellikler staging'de test edildi
+            - [ ] Kritik bug yok
+            - [ ] Database migration hazır (varsa)
+            - [ ] Rollback planı hazır
+            - [ ] Takım bilgilendirildi
+
+            ### 🚀 Sonraki Adım
+            1. Bu PR'ı "Ready for review" yap
+            2. Final review ve onay al
+            3. Merge et → Otomatik PROD deploy (2 replica)
+
+            ---
+            🤖 *Bu release PR otomatik güncellendi. Son push: ${context.sha.substring(0, 8)}*
+            `
+            });
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🔄 **Release PR Güncellendi**\n\nYeni commit eklendi: \`${context.sha.substring(0, 8)}\`\n\nVersion: \`${{ steps.version.outputs.version }}\``
+            });
+            
+            console.log(`Updated Release PR #${prNumber}`);
 
   # ===========================================================================
   # Hotfix → Main & Dev
@@ -167,47 +371,82 @@ jobs:
           echo "🔥 Hotfix: $HOTFIX_NAME"
 
       - name: Create Hotfix PR to Main
-        uses: peter-evans/create-pull-request@v6
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref_name }}
-          base: main
-          title: "🔥 [Hotfix] ${{ steps.hotfix.outputs.name }} → main"
-          body: |
-            ## 🔥 Hotfix: ${{ steps.hotfix.outputs.name }}
+          script: |
+            // Check if PR already exists
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${{ github.ref_name }}`,
+              base: 'main',
+              state: 'open'
+            });
             
+            if (prs.length === 0) {
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔥 [Hotfix] ${{ steps.hotfix.outputs.name }} → main',
+                head: '${{ github.ref_name }}',
+                base: 'main',
+                draft: false,
+                body: `## 🔥 Hotfix: ${{ steps.hotfix.outputs.name }}
+
             **URGENT:** Bu hotfix doğrudan production'a uygulanacak.
-            
+
             ### ⚠️ Hotfix Checklist
-            - [ ] Issue identified and documented
-            - [ ] Fix tested locally
-            - [ ] No side effects
-            - [ ] Ready for immediate deployment
-            
+            - [ ] Issue tanımlandı ve dokümante edildi
+            - [ ] Fix lokal test edildi
+            - [ ] Yan etki yok
+            - [ ] Hemen deploy için hazır
+
             ---
-            🤖 *This hotfix PR was automatically created*
-          labels: |
-            gitflow
-            hotfix
-            urgent
-          draft: false
+            🤖 *Bu hotfix PR otomatik oluşturuldu*
+            `
+              });
+              
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['gitflow', 'hotfix', 'urgent']
+              });
+            }
 
       - name: Create Hotfix PR to Dev
-        uses: peter-evans/create-pull-request@v6
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref_name }}
-          base: dev
-          title: "🔥 [Hotfix] ${{ steps.hotfix.outputs.name }} → dev"
-          body: |
-            ## 🔥 Hotfix Backport: ${{ steps.hotfix.outputs.name }}
+          script: |
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${{ github.ref_name }}`,
+              base: 'dev',
+              state: 'open'
+            });
             
+            if (prs.length === 0) {
+              const { data: pr } = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔥 [Hotfix Backport] ${{ steps.hotfix.outputs.name }} → dev',
+                head: '${{ github.ref_name }}',
+                base: 'dev',
+                draft: false,
+                body: `## 🔥 Hotfix Backport: ${{ steps.hotfix.outputs.name }}
+
             Bu PR, hotfix'i dev branch'ine de uygular.
-            
+
             ---
-            🤖 *This hotfix backport PR was automatically created*
-          labels: |
-            gitflow
-            hotfix
-            backport
-          draft: false
+            🤖 *Bu hotfix backport PR otomatik oluşturuldu*
+            `
+              });
+              
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: ['gitflow', 'hotfix', 'backport']
+              });
+            }
