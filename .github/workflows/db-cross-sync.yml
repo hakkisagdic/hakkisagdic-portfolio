@@ -1,0 +1,214 @@
+name: Cross-Environment Database Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_env:
+        description: 'Source environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: 'dev'
+      target_env:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: 'prod'
+      sync_type:
+        description: 'Sync type'
+        required: true
+        type: choice
+        options:
+          - data_only
+          - schema_and_data
+        default: 'data_only'
+
+env:
+  CUSTOMER_NAME: ${{ vars.CUSTOMER_NAME }}
+
+jobs:
+  export-from-source:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.source_env }}
+    outputs:
+      dump_exists: ${{ steps.export.outputs.dump_exists }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export Database from Source
+        id: export
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          envs: CUSTOMER_NAME
+          script: |
+            set -e
+
+            SOURCE_ENV="${{ github.event.inputs.source_env }}"
+            SYNC_TYPE="${{ github.event.inputs.sync_type }}"
+
+            # Determine stack name based on environment
+            if [ "$SOURCE_ENV" = "prod" ]; then
+              SOURCE_STACK="${CUSTOMER_NAME}-prod"
+            elif [ "$SOURCE_ENV" = "staging" ]; then
+              SOURCE_STACK="${CUSTOMER_NAME}-stg"
+            else
+              SOURCE_STACK="${CUSTOMER_NAME}-dev"
+            fi
+
+            echo "=== Export from $SOURCE_ENV ==="
+            echo "Stack: $SOURCE_STACK"
+
+            # Find database container
+            SOURCE_DB=$(docker ps --format "{{.ID}} {{.Names}}" | grep "${SOURCE_STACK}_db" | awk '{print $1}' | head -1)
+
+            if [ -z "$SOURCE_DB" ]; then
+              echo "❌ Database container not found for: ${SOURCE_STACK}_db"
+              docker ps --format "{{.Names}}" | grep db || true
+              exit 1
+            fi
+
+            echo "Database container: $SOURCE_DB"
+
+            # Create dump
+            DUMP_FILE="/tmp/cross_sync_dump.sql"
+
+            if [ "$SYNC_TYPE" = "data_only" ]; then
+              echo "📤 Creating data-only dump..."
+              docker exec $SOURCE_DB pg_dump -U portfolio --data-only --disable-triggers portfolio > $DUMP_FILE
+            else
+              echo "📤 Creating full dump (schema + data)..."
+              docker exec $SOURCE_DB pg_dump -U portfolio portfolio > $DUMP_FILE
+            fi
+
+            DUMP_SIZE=$(wc -c < $DUMP_FILE)
+            echo "✅ Dump created: $DUMP_SIZE bytes"
+
+            # Base64 encode for transfer (artifact workaround)
+            base64 $DUMP_FILE > /tmp/cross_sync_dump.b64
+            cat /tmp/cross_sync_dump.b64
+
+      - name: Save dump to file
+        run: |
+          echo "Saving dump output..."
+          mkdir -p /tmp/dump
+
+      - name: Create dump artifact
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          script: |
+            cat /tmp/cross_sync_dump.b64
+        env:
+          ACTIONS_STEP_DEBUG: true
+
+      - name: Download dump via SCP
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SWARM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SWARM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          scp -o StrictHostKeyChecking=no ${{ secrets.SWARM_USER }}@${{ secrets.SWARM_HOST }}:/tmp/cross_sync_dump.sql ./dump.sql
+          ls -la dump.sql
+          echo "dump_exists=true" >> $GITHUB_OUTPUT
+
+      - name: Upload dump artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-dump
+          path: dump.sql
+          retention-days: 1
+
+  import-to-target:
+    runs-on: ubuntu-latest
+    needs: export-from-source
+    environment: ${{ github.event.inputs.target_env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dump artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: database-dump
+
+      - name: Upload dump to target server
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SWARM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SWARM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          scp -o StrictHostKeyChecking=no dump.sql ${{ secrets.SWARM_USER }}@${{ secrets.SWARM_HOST }}:/tmp/cross_sync_import.sql
+          echo "Dump uploaded to target server"
+
+      - name: Import Database to Target
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          envs: CUSTOMER_NAME
+          script: |
+            set -e
+
+            TARGET_ENV="${{ github.event.inputs.target_env }}"
+            SYNC_TYPE="${{ github.event.inputs.sync_type }}"
+
+            # Determine stack name based on environment
+            if [ "$TARGET_ENV" = "prod" ]; then
+              TARGET_STACK="${CUSTOMER_NAME}-prod"
+            elif [ "$TARGET_ENV" = "staging" ]; then
+              TARGET_STACK="${CUSTOMER_NAME}-stg"
+            else
+              TARGET_STACK="${CUSTOMER_NAME}-dev"
+            fi
+
+            echo "=== Import to $TARGET_ENV ==="
+            echo "Stack: $TARGET_STACK"
+
+            # Find database container
+            TARGET_DB=$(docker ps --format "{{.ID}} {{.Names}}" | grep "${TARGET_STACK}_db" | awk '{print $1}' | head -1)
+
+            if [ -z "$TARGET_DB" ]; then
+              echo "❌ Database container not found for: ${TARGET_STACK}_db"
+              docker ps --format "{{.Names}}" | grep db || true
+              exit 1
+            fi
+
+            echo "Database container: $TARGET_DB"
+
+            DUMP_FILE="/tmp/cross_sync_import.sql"
+
+            if [ ! -f "$DUMP_FILE" ]; then
+              echo "❌ Dump file not found!"
+              exit 1
+            fi
+
+            DUMP_SIZE=$(wc -c < $DUMP_FILE)
+            echo "📥 Importing dump: $DUMP_SIZE bytes"
+
+            if [ "$SYNC_TYPE" = "schema_and_data" ]; then
+              echo "🔄 Dropping existing schema..."
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+            fi
+
+            # Import
+            echo "📥 Importing data..."
+            docker exec -i $TARGET_DB psql -U portfolio -d portfolio < $DUMP_FILE
+
+            # Cleanup
+            rm -f $DUMP_FILE
+
+            echo ""
+            echo "✅ Import complete!"
+            echo "🎉 Database synced from ${{ github.event.inputs.source_env }} to ${{ github.event.inputs.target_env }}"
