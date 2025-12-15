@@ -122,10 +122,10 @@ jobs:
             REPLICAS=1
             ENVEOF
 
-            # Replace placeholders with actual values
+            # Replace placeholders with actual values (keep CUSTOMER_NAME original for image path)
             sed -i "s|__VERSION__|${VERSION}|g" .env
             sed -i "s|__ACR_NAME__|${{ env.ACR_NAME }}|g" .env
-            sed -i "s|__CUSTOMER_NAME__|${STACK_NAME}|g" .env
+            sed -i "s|__CUSTOMER_NAME__|${{ env.CUSTOMER_NAME }}|g" .env
             sed -i "s|__DOMAIN__|dev.${{ vars.DOMAIN }}|g" .env
 
             echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
@@ -137,14 +137,21 @@ jobs:
             cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
+            # Also update Traefik router names to be environment-specific
+            export STACK_NAME
             python3 << 'PYEOF'
-            import sys
+            import sys, os
             db_pwd = '''${{ secrets.DB_PASSWORD }}'''
             nextauth = '''${{ secrets.NEXTAUTH_SECRET }}'''
+            customer_name = '''${{ env.CUSTOMER_NAME }}'''
+            stack_name = os.environ.get('STACK_NAME', customer_name)
             with open('docker-compose.rendered.yml', 'r') as f:
                 content = f.read()
             content = content.replace('${DB_PASSWORD}', db_pwd)
             content = content.replace('${NEXTAUTH_SECRET}', nextauth)
+            # Update Traefik router names to be unique per environment
+            content = content.replace(f'routers.{customer_name}', f'routers.{stack_name}')
+            content = content.replace(f'services.{customer_name}', f'services.{stack_name}')
             with open('docker-compose.rendered.yml', 'w') as f:
                 f.write(content)
             PYEOF
@@ -260,10 +267,10 @@ jobs:
             REPLICAS=1
             ENVEOF
 
-            # Replace placeholders with actual values
+            # Replace placeholders with actual values (keep CUSTOMER_NAME original for image path)
             sed -i "s|__VERSION__|${VERSION}|g" .env
             sed -i "s|__ACR_NAME__|${{ env.ACR_NAME }}|g" .env
-            sed -i "s|__CUSTOMER_NAME__|${STACK_NAME}|g" .env
+            sed -i "s|__CUSTOMER_NAME__|${{ env.CUSTOMER_NAME }}|g" .env
             sed -i "s|__DOMAIN__|stg.${{ vars.DOMAIN }}|g" .env
 
             echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
@@ -275,14 +282,21 @@ jobs:
             cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
+            # Also update Traefik router names to be environment-specific
+            export STACK_NAME
             python3 << 'PYEOF'
-            import sys
+            import sys, os
             db_pwd = '''${{ secrets.DB_PASSWORD }}'''
             nextauth = '''${{ secrets.NEXTAUTH_SECRET }}'''
+            customer_name = '''${{ env.CUSTOMER_NAME }}'''
+            stack_name = os.environ.get('STACK_NAME', customer_name)
             with open('docker-compose.rendered.yml', 'r') as f:
                 content = f.read()
             content = content.replace('${DB_PASSWORD}', db_pwd)
             content = content.replace('${NEXTAUTH_SECRET}', nextauth)
+            # Update Traefik router names to be unique per environment
+            content = content.replace(f'routers.{customer_name}', f'routers.{stack_name}')
+            content = content.replace(f'services.{customer_name}', f'services.{stack_name}')
             with open('docker-compose.rendered.yml', 'w') as f:
                 f.write(content)
             PYEOF
@@ -409,10 +423,10 @@ jobs:
             REPLICAS=2
             ENVEOF
 
-            # Replace placeholders with actual values
+            # Replace placeholders with actual values (keep CUSTOMER_NAME original for image path)
             sed -i "s|__VERSION__|${VERSION}|g" .env
             sed -i "s|__ACR_NAME__|${{ env.ACR_NAME }}|g" .env
-            sed -i "s|__CUSTOMER_NAME__|${STACK_NAME}|g" .env
+            sed -i "s|__CUSTOMER_NAME__|${{ env.CUSTOMER_NAME }}|g" .env
             sed -i "s|__DOMAIN__|${{ vars.DOMAIN }}|g" .env
 
             echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
@@ -424,14 +438,21 @@ jobs:
             cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
+            # Also update Traefik router names to be environment-specific
+            export STACK_NAME
             python3 << 'PYEOF'
-            import sys
+            import sys, os
             db_pwd = '''${{ secrets.DB_PASSWORD }}'''
             nextauth = '''${{ secrets.NEXTAUTH_SECRET }}'''
+            customer_name = '''${{ env.CUSTOMER_NAME }}'''
+            stack_name = os.environ.get('STACK_NAME', customer_name)
             with open('docker-compose.rendered.yml', 'r') as f:
                 content = f.read()
             content = content.replace('${DB_PASSWORD}', db_pwd)
             content = content.replace('${NEXTAUTH_SECRET}', nextauth)
+            # Update Traefik router names to be unique per environment
+            content = content.replace(f'routers.{customer_name}', f'routers.{stack_name}')
+            content = content.replace(f'services.{customer_name}', f'services.{stack_name}')
             with open('docker-compose.rendered.yml', 'w') as f:
                 f.write(content)
             PYEOF
