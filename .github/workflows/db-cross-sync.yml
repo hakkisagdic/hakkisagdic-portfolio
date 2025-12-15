@@ -29,6 +29,16 @@ on:
           - data_only
           - schema_and_data
         default: 'data_only'
+      source_stack_override:
+        description: 'Override source stack name (leave empty for auto)'
+        required: false
+        type: string
+        default: ''
+      target_stack_override:
+        description: 'Override target stack name (leave empty for auto)'
+        required: false
+        type: string
+        default: ''
 
 env:
   CUSTOMER_NAME: ${{ vars.CUSTOMER_NAME }}
@@ -55,9 +65,12 @@ jobs:
 
             SOURCE_ENV="${{ github.event.inputs.source_env }}"
             SYNC_TYPE="${{ github.event.inputs.sync_type }}"
+            SOURCE_OVERRIDE="${{ github.event.inputs.source_stack_override }}"
 
-            # Determine stack name based on environment
-            if [ "$SOURCE_ENV" = "prod" ]; then
+            # Use override if provided, otherwise determine from environment
+            if [ -n "$SOURCE_OVERRIDE" ]; then
+              SOURCE_STACK="$SOURCE_OVERRIDE"
+            elif [ "$SOURCE_ENV" = "prod" ]; then
               SOURCE_STACK="${CUSTOMER_NAME}-prod"
             elif [ "$SOURCE_ENV" = "staging" ]; then
               SOURCE_STACK="${CUSTOMER_NAME}-stg"
@@ -163,9 +176,12 @@ jobs:
 
             TARGET_ENV="${{ github.event.inputs.target_env }}"
             SYNC_TYPE="${{ github.event.inputs.sync_type }}"
+            TARGET_OVERRIDE="${{ github.event.inputs.target_stack_override }}"
 
-            # Determine stack name based on environment
-            if [ "$TARGET_ENV" = "prod" ]; then
+            # Use override if provided, otherwise determine from environment
+            if [ -n "$TARGET_OVERRIDE" ]; then
+              TARGET_STACK="$TARGET_OVERRIDE"
+            elif [ "$TARGET_ENV" = "prod" ]; then
               TARGET_STACK="${CUSTOMER_NAME}-prod"
             elif [ "$TARGET_ENV" = "staging" ]; then
               TARGET_STACK="${CUSTOMER_NAME}-stg"
