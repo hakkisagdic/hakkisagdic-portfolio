@@ -53,6 +53,32 @@ jobs:
             echo "Type: ${SYNC_TYPE}"
             echo ""
 
+            # Debug mode - run first, before container checks
+            if [ "$SYNC_TYPE" = "debug" ]; then
+              echo "=== Debug Mode ==="
+              echo ""
+              echo "📋 All Docker containers:"
+              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | head -30
+              echo ""
+              echo "📋 Stack services for ${TARGET_STACK}:"
+              docker stack services ${TARGET_STACK} 2>/dev/null || echo "Stack not found"
+              echo ""
+              echo "📋 Service logs for ${TARGET_STACK}_db (last 50 lines):"
+              docker service logs ${TARGET_STACK}_db --tail 50 2>&1 || echo "No logs found"
+              echo ""
+              echo "📋 Service tasks for ${TARGET_STACK}_db:"
+              docker service ps ${TARGET_STACK}_db --no-trunc 2>&1 || echo "Service not found"
+              echo ""
+              echo "📋 Docker volumes:"
+              docker volume ls | grep -E "(portfolio|postgres)" || echo "No matching volumes"
+              echo ""
+              echo "📋 Docker networks:"
+              docker network ls | grep -E "(portfolio|internal)" || echo "No matching networks"
+              echo ""
+              echo "=== Debug Complete ==="
+              exit 0
+            fi
+
             # List all containers for debugging
             echo "All running containers:"
             docker ps --format "{{.Names}}" | grep -E "(db|portfolio)" || true
@@ -77,30 +103,7 @@ jobs:
             echo "Source DB container: $SOURCE_DB"
             echo "Target DB container: $TARGET_DB"
 
-            if [ "$SYNC_TYPE" = "debug" ]; then
-              echo "=== Debug Mode ==="
-              echo ""
-              echo "📋 All Docker containers:"
-              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | head -30
-              echo ""
-              echo "📋 Stack services for ${TARGET_STACK}:"
-              docker stack services ${TARGET_STACK} 2>/dev/null || echo "Stack not found"
-              echo ""
-              echo "📋 Service logs for ${TARGET_STACK}_db (last 50 lines):"
-              docker service logs ${TARGET_STACK}_db --tail 50 2>&1 || echo "No logs found"
-              echo ""
-              echo "📋 Service tasks for ${TARGET_STACK}_db:"
-              docker service ps ${TARGET_STACK}_db --no-trunc 2>&1 || echo "Service not found"
-              echo ""
-              echo "📋 Docker volumes:"
-              docker volume ls | grep -E "(portfolio|postgres)" || echo "No matching volumes"
-              echo ""
-              echo "📋 Docker networks:"
-              docker network ls | grep -E "(portfolio|internal)" || echo "No matching networks"
-              echo ""
-              echo "=== Debug Complete ==="
-              exit 0
-            elif [ "$SYNC_TYPE" = "seed_only" ]; then
+            if [ "$SYNC_TYPE" = "seed_only" ]; then
               echo "Running Prisma seed on target..."
               TARGET_APP=$(docker ps -q -f "name=${TARGET_STACK}_portfolio" | head -1)
               if [ -n "$TARGET_APP" ]; then
