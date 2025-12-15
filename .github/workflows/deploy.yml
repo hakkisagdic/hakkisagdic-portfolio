@@ -133,8 +133,9 @@ jobs:
             source .env
             export VERSION ACR_NAME CUSTOMER_NAME DOMAIN REPLICAS
 
-            # First pass: envsubst for non-sensitive variables
-            cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
+            # First pass: envsubst for non-sensitive variables only
+            # IMPORTANT: Must specify which vars to substitute, otherwise envsubst replaces ALL ${VAR} including DB_PASSWORD
+            cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst '$ACR_NAME $CUSTOMER_NAME $DOMAIN' > docker-compose.rendered.yml
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
             # Also update Traefik router names to be environment-specific
@@ -278,8 +279,9 @@ jobs:
             source .env
             export VERSION ACR_NAME CUSTOMER_NAME DOMAIN REPLICAS
 
-            # First pass: envsubst for non-sensitive variables
-            cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
+            # First pass: envsubst for non-sensitive variables only
+            # IMPORTANT: Must specify which vars to substitute, otherwise envsubst replaces ALL ${VAR} including DB_PASSWORD
+            cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst '$ACR_NAME $CUSTOMER_NAME $DOMAIN' > docker-compose.rendered.yml
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
             # Also update Traefik router names to be environment-specific
@@ -434,8 +436,9 @@ jobs:
             source .env
             export VERSION ACR_NAME CUSTOMER_NAME DOMAIN REPLICAS
 
-            # First pass: envsubst for non-sensitive variables
-            cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
+            # First pass: envsubst for non-sensitive variables only
+            # IMPORTANT: Must specify which vars to substitute, otherwise envsubst replaces ALL ${VAR} including DB_PASSWORD
+            cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst '$ACR_NAME $CUSTOMER_NAME $DOMAIN' > docker-compose.rendered.yml
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
             # Also update Traefik router names to be environment-specific
