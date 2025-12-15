@@ -57,8 +57,11 @@ jobs:
             if [ "$SYNC_TYPE" = "debug" ]; then
               echo "=== Debug Mode ==="
               echo ""
+              echo "📋 ALL Docker Stacks:"
+              docker stack ls
+              echo ""
               echo "📋 All Docker containers:"
-              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | head -30
+              docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | head -40
               echo ""
               echo "📋 Stack services for ${TARGET_STACK}:"
               docker stack services ${TARGET_STACK} 2>/dev/null || echo "Stack not found"
@@ -74,6 +77,15 @@ jobs:
               echo ""
               echo "📋 Docker networks:"
               docker network ls | grep -E "(portfolio|internal)" || echo "No matching networks"
+              echo ""
+              echo "📋 Recent Docker events (last 100):"
+              docker events --since 1h --until 0s 2>/dev/null | tail -100 || echo "No recent events"
+              echo ""
+              echo "📋 Crontab check:"
+              crontab -l 2>/dev/null || echo "No crontab"
+              echo ""
+              echo "📋 System cron jobs:"
+              ls -la /etc/cron.d/ 2>/dev/null | head -20 || echo "No cron.d"
               echo ""
               echo "=== Debug Complete ==="
               exit 0
