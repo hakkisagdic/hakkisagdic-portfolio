@@ -163,34 +163,19 @@ jobs:
             elif [ "$SYNC_TYPE" = "seed_only" ]; then
               echo "🌱 Running SQL seed on target database..."
 
-              # Admin password hash (bcrypt 12 rounds for 'admin123')
-              ADMIN_HASH='$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.5Q9eY4Q3.H5.Wq'
+              # Admin User
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "INSERT INTO \"User\" (id, email, password, name, role, \"createdAt\", \"updatedAt\") VALUES ('admin001', 'admin@hakkisagdic.dev', '\$2a\$12\$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.5Q9eY4Q3.H5.Wq', 'Hakkı Sağdıç', 'admin', NOW(), NOW()) ON CONFLICT (email) DO NOTHING;"
 
-              # Insert seed data
-              docker exec $TARGET_DB psql -U portfolio -d portfolio << 'EOSQL'
-              -- Admin User
-              INSERT INTO "User" (id, email, password, name, role, "createdAt", "updatedAt")
-              VALUES ('admin001', 'admin@hakkisagdic.dev', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.5Q9eY4Q3.H5.Wq', 'Hakkı Sağdıç', 'admin', NOW(), NOW())
-              ON CONFLICT (email) DO NOTHING;
+              # Default Settings
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "INSERT INTO \"Settings\" (id, \"siteTitle\", \"siteDescription\", theme, \"primaryColor\", \"accentColor\", \"showParticles\", \"showGrid\", \"showScanlines\", \"particleCount\", \"animationSpeed\") VALUES ('default', 'Hakkı Sağdıç', 'DevOps Engineer Portfolio', 'cyberpunk', '#00f0ff', '#f000ff', true, true, true, 100, 1.0) ON CONFLICT (id) DO NOTHING;"
 
-              -- Default Settings
-              INSERT INTO "Settings" (id, "siteTitle", "siteDescription", theme, "primaryColor", "accentColor", "showParticles", "showGrid", "showScanlines", "particleCount", "animationSpeed")
-              VALUES ('default', 'Hakkı Sağdıç', 'DevOps Engineer Portfolio', 'cyberpunk', '#00f0ff', '#f000ff', true, true, true, 100, 1.0)
-              ON CONFLICT (id) DO NOTHING;
+              # Default Profile
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "INSERT INTO \"Profile\" (id, name, headline, summary, location, email, linkedin, github, \"createdAt\", \"updatedAt\") VALUES ('default', 'Hakkı Sağdıç', 'DevOps Engineer', 'Experienced DevOps Engineer specializing in Docker, Kubernetes, Azure, and cloud-native solutions.', 'Istanbul, Turkey', 'hakki@hakkisagdic.dev', 'https://linkedin.com/in/hakkisagdic', 'https://github.com/hakkisagdic', NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
 
-              -- Default Profile
-              INSERT INTO "Profile" (id, name, headline, summary, location, email, linkedin, github, "createdAt", "updatedAt")
-              VALUES ('default', 'Hakkı Sağdıç', 'DevOps Engineer', 'Experienced DevOps Engineer specializing in Docker, Kubernetes, Azure, and cloud-native solutions.', 'Istanbul, Turkey', 'hakki@hakkisagdic.dev', 'https://linkedin.com/in/hakkisagdic', 'https://github.com/hakkisagdic', NOW(), NOW())
-              ON CONFLICT (id) DO NOTHING;
-
-              -- Sample Highlights
-              INSERT INTO "Highlight" (id, icon, title, description, "order", "createdAt", "updatedAt")
-              VALUES
-                ('hl1', 'Container', 'Docker & Kubernetes', 'Container orchestration and microservices architecture', 1, NOW(), NOW()),
-                ('hl2', 'Cloud', 'Azure Cloud', 'Cloud infrastructure design and management', 2, NOW(), NOW()),
-                ('hl3', 'GitBranch', 'CI/CD Pipelines', 'Automated deployment workflows and DevOps practices', 3, NOW(), NOW())
-              ON CONFLICT (id) DO NOTHING;
-              EOSQL
+              # Sample Highlights
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "INSERT INTO \"Highlight\" (id, icon, title, description, \"order\", \"createdAt\", \"updatedAt\") VALUES ('hl1', 'Container', 'Docker & Kubernetes', 'Container orchestration and microservices architecture', 1, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "INSERT INTO \"Highlight\" (id, icon, title, description, \"order\", \"createdAt\", \"updatedAt\") VALUES ('hl2', 'Cloud', 'Azure Cloud', 'Cloud infrastructure design and management', 2, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "INSERT INTO \"Highlight\" (id, icon, title, description, \"order\", \"createdAt\", \"updatedAt\") VALUES ('hl3', 'GitBranch', 'CI/CD Pipelines', 'Automated deployment workflows and DevOps practices', 3, NOW(), NOW()) ON CONFLICT (id) DO NOTHING;"
 
               echo "✅ Seed data inserted successfully!"
             else
