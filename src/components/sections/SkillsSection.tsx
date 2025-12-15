@@ -1,107 +1,113 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+
+interface Skill {
+  id: string;
+  name: string;
+  category: string;
+  level: number;
+}
 
 interface SkillCategory {
   name: string;
   color: string;
-  skills: { name: string; level: number }[];
+  skills: string[];
 }
 
-const skillCategories: SkillCategory[] = [
-  {
-    name: "Container & Orchestration",
-    color: "#00f0ff",
-    skills: [
-      { name: "Docker", level: 95 },
-      { name: "Docker Swarm", level: 95 },
-      { name: "Kubernetes", level: 85 },
-      { name: "Portainer", level: 90 },
-      { name: "Traefik", level: 90 },
-    ],
-  },
-  {
-    name: "Cloud Platforms",
-    color: "#f000ff",
-    skills: [
-      { name: "Microsoft Azure", level: 90 },
-      { name: "Azure DevOps", level: 85 },
-      { name: "AWS", level: 70 },
-      { name: "Cloudflare", level: 85 },
-    ],
-  },
-  {
-    name: "Infrastructure as Code",
-    color: "#7000ff",
-    skills: [
-      { name: "Terraform", level: 85 },
-      { name: "Bicep", level: 80 },
-      { name: "ARM Templates", level: 75 },
-      { name: "Ansible", level: 70 },
-    ],
-  },
-  {
-    name: "CI/CD & Automation",
-    color: "#00ff9f",
-    skills: [
-      { name: "GitHub Actions", level: 90 },
-      { name: "Azure Pipelines", level: 85 },
-      { name: "GitLab CI", level: 80 },
-      { name: "Shell Scripting", level: 90 },
-    ],
-  },
-  {
-    name: "Monitoring & Logging",
-    color: "#ff9f00",
-    skills: [
-      { name: "Prometheus", level: 85 },
-      { name: "Grafana", level: 90 },
-      { name: "Loki", level: 80 },
-      { name: "ELK Stack", level: 75 },
-    ],
-  },
-  {
-    name: "Development",
-    color: "#00f0ff",
-    skills: [
-      { name: "Python", level: 80 },
-      { name: "Go", level: 65 },
-      { name: "Node.js", level: 75 },
-      { name: "PostgreSQL", level: 85 },
-    ],
-  },
-];
+// Color mapping for categories
+const categoryColors: Record<string, string> = {
+  "General": "#00f0ff",
+  "Container & Orchestration": "#00f0ff",
+  "Cloud Platforms": "#f000ff",
+  "Cloud": "#f000ff",
+  "Infrastructure as Code": "#7000ff",
+  "CI/CD & Automation": "#00ff9f",
+  "DevOps": "#00ff9f",
+  "Monitoring & Logging": "#ff9f00",
+  "Development": "#00f0ff",
+  "Languages": "#f000ff",
+  "Frameworks": "#7000ff",
+  "Tools": "#ff9f00",
+  "Database": "#00ff9f",
+  "Testing": "#f000ff",
+};
 
-function SkillBar({ name, level, color, delay }: { 
-  name: string; 
-  level: number; 
-  color: string;
-  delay: number;
-}) {
-  return (
-    <div className="mb-4">
-      <div className="flex justify-between mb-1">
-        <span className="text-text text-sm font-medium">{name}</span>
-        <span className="text-text-muted text-sm">{level}%</span>
-      </div>
-      <div className="h-2 bg-surface-light rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          whileInView={{ width: `${level}%` }}
-          viewport={{ once: true }}
-          transition={{ duration: 1, delay, ease: "easeOut" }}
-          className="h-full rounded-full"
-          style={{ 
-            backgroundColor: color,
-            boxShadow: `0 0 10px ${color}50`
-          }}
-        />
-      </div>
-    </div>
-  );
+function getColorForCategory(category: string): string {
+  return categoryColors[category] || "#00f0ff";
+}
+
+// Auto-categorize skills based on keywords
+function categorizeSkill(skillName: string): string {
+  const name = skillName.toLowerCase();
+
+  if (['azure', 'aws', 'cloud', 'bulut'].some(k => name.includes(k))) return "Cloud";
+  if (['docker', 'kubernetes', 'k8s', 'container', 'openshift'].some(k => name.includes(k))) return "DevOps";
+  if (['ci/cd', 'jenkins', 'github', 'gitlab', 'bitbucket', 'devops', 'sonarqube'].some(k => name.includes(k))) return "DevOps";
+  if (['c#', 'javascript', 'python', 'java', 'typescript', 'go', 'php', 'sql'].some(k => name.includes(k))) return "Languages";
+  if (['react', 'angular', 'vue', '.net', 'asp.net', 'entity framework', 'node'].some(k => name.includes(k))) return "Frameworks";
+  if (['test', 'unit', 'xunit', 'nunit', 'selenium'].some(k => name.includes(k))) return "Testing";
+  if (['jira', 'confluence', 'trello', 'git', 'agile', 'scrum'].some(k => name.includes(k))) return "Tools";
+  if (['sql server', 'postgresql', 'mongodb', 'redis', 'elasticsearch'].some(k => name.includes(k))) return "Database";
+
+  return "General";
 }
 
 export function SkillsSection() {
+  const [skillCategories, setSkillCategories] = useState<SkillCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/skills")
+      .then((res) => res.json())
+      .then((data: Skill[]) => {
+        // Group skills by category (auto-categorize if "General")
+        const grouped: Record<string, string[]> = {};
+
+        data.forEach((skill) => {
+          const category = skill.category === "General"
+            ? categorizeSkill(skill.name)
+            : skill.category;
+
+          if (!grouped[category]) grouped[category] = [];
+          if (!grouped[category].includes(skill.name)) {
+            grouped[category].push(skill.name);
+          }
+        });
+
+        // Convert to SkillCategory array and sort
+        const categories: SkillCategory[] = Object.entries(grouped)
+          .map(([name, skills]) => ({
+            name,
+            color: getColorForCategory(name),
+            skills: skills.sort(),
+          }))
+          .sort((a, b) => b.skills.length - a.skills.length);
+
+        setSkillCategories(categories);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch skills:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <section id="skills" className="py-24 px-6 bg-surface/30">
+        <div className="max-w-6xl mx-auto text-center">
+          <div className="animate-pulse text-primary">Loading skills...</div>
+        </div>
+      </section>
+    );
+  }
+
+  if (skillCategories.length === 0) {
+    return null;
+  }
+
   return (
     <section id="skills" className="py-24 px-6 bg-surface/30">
       <div className="max-w-6xl mx-auto">
@@ -111,7 +117,7 @@ export function SkillsSection() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className="text-center mb-16"
+          className="text-center mb-12"
         >
           <span className="text-primary font-mono text-sm tracking-widest uppercase">
             {"// Technical Skills"}
@@ -124,8 +130,8 @@ export function SkillsSection() {
           </p>
         </motion.div>
 
-        {/* Skills Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {/* Skills as Tags */}
+        <div className="space-y-8">
           {skillCategories.map((category, categoryIndex) => (
             <motion.div
               key={category.name}
@@ -133,26 +139,50 @@ export function SkillsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: categoryIndex * 0.1 }}
-              className="bg-surface/50 backdrop-blur-sm border border-primary/10 rounded-lg p-6 hover:border-primary/30 transition-colors duration-300"
             >
-              <h3 
-                className="font-heading text-lg mb-6 pb-2 border-b"
-                style={{ 
-                  color: category.color,
-                  borderColor: `${category.color}30`
-                }}
+              <h3
+                className="font-heading text-lg mb-4 flex items-center gap-2"
+                style={{ color: category.color }}
               >
-                {category.name}
-              </h3>
-              {category.skills.map((skill, skillIndex) => (
-                <SkillBar
-                  key={skill.name}
-                  name={skill.name}
-                  level={skill.level}
-                  color={category.color}
-                  delay={categoryIndex * 0.1 + skillIndex * 0.05}
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: category.color }}
                 />
-              ))}
+                {category.name}
+                <span className="text-text-muted text-sm font-normal">
+                  ({category.skills.length})
+                </span>
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {category.skills.map((skill, skillIndex) => (
+                  <motion.span
+                    key={skill}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{
+                      duration: 0.3,
+                      delay: categoryIndex * 0.1 + skillIndex * 0.02
+                    }}
+                    className="px-3 py-1.5 text-sm rounded-full border transition-all duration-300 hover:scale-105 cursor-default"
+                    style={{
+                      borderColor: `${category.color}40`,
+                      backgroundColor: `${category.color}10`,
+                      color: category.color,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = `${category.color}30`;
+                      e.currentTarget.style.boxShadow = `0 0 15px ${category.color}30`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = `${category.color}10`;
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    {skill}
+                  </motion.span>
+                ))}
+              </div>
             </motion.div>
           ))}
         </div>

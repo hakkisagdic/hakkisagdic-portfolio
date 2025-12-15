@@ -11,6 +11,7 @@ interface Education {
   field: string | null;
   startDate: string;
   endDate: string | null;
+  showDates: boolean;
   description: string | null;
   order: number;
 }
@@ -44,6 +45,7 @@ export default function EducationPage() {
       field: null,
       startDate: "",
       endDate: null,
+      showDates: true,
       description: null,
       order: education.length,
     };
@@ -51,7 +53,7 @@ export default function EducationPage() {
     setExpandedId(newEdu.id);
   };
 
-  const updateEducation = (id: string, field: keyof Education, value: string) => {
+  const updateEducation = (id: string, field: keyof Education, value: string | boolean) => {
     setEducation((prev) =>
       prev.map((edu) => (edu.id === id ? { ...edu, [field]: value } : edu))
     );
@@ -150,9 +152,20 @@ export default function EducationPage() {
                     <Input label="School / University" value={edu.school} onChange={(e) => updateEducation(edu.id, "school", e.target.value)} required />
                     <Input label="Degree" value={edu.degree} onChange={(e) => updateEducation(edu.id, "degree", e.target.value)} required placeholder="Bachelor's, Master's, etc." />
                     <Input label="Field of Study" value={edu.field || ""} onChange={(e) => updateEducation(edu.id, "field", e.target.value)} placeholder="Computer Science" />
-                    <div />
-                    <Input label="Start Date" type="date" value={edu.startDate} onChange={(e) => updateEducation(edu.id, "startDate", e.target.value)} required />
-                    <Input label="End Date" type="date" value={edu.endDate || ""} onChange={(e) => updateEducation(edu.id, "endDate", e.target.value)} />
+                    <div className="flex items-center gap-3 pt-6">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={edu.showDates}
+                          onChange={(e) => updateEducation(edu.id, "showDates", e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        <span className="ml-3 text-sm text-gray-300">Show Dates</span>
+                      </label>
+                    </div>
+                    <Input label="Start Date" type="date" value={edu.startDate} onChange={(e) => updateEducation(edu.id, "startDate", e.target.value)} disabled={!edu.showDates} />
+                    <Input label="End Date" type="date" value={edu.endDate || ""} onChange={(e) => updateEducation(edu.id, "endDate", e.target.value)} disabled={!edu.showDates} />
                   </div>
                   <Textarea label="Description / Notes" value={edu.description || ""} onChange={(e) => updateEducation(edu.id, "description", e.target.value)} rows={3} />
                 </div>

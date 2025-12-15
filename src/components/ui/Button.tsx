@@ -41,7 +41,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       `,
       accent: `
         bg-transparent border border-accent text-accent
-        hover:bg-accent/10 hover:shadow-neon-magenta
+        hover:bg-accent/20 hover:shadow-neon-magenta
+        hover:text-accent hover:border-accent
+        hover:text-shadow-glow
+        active:scale-95
       `,
       ghost: `
         bg-transparent text-text-muted

@@ -1,63 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui";
 import { Calendar, MapPin } from "lucide-react";
 
-// Placeholder data - will be fetched from DB
-const experiences = [
-  {
-    id: "1",
-    title: "Senior DevOps Engineer",
-    company: "TechCorp",
-    location: "Istanbul, Turkey",
-    startDate: "2022-01",
-    endDate: null,
-    current: true,
-    description: `
-      Leading infrastructure modernization initiatives and implementing GitOps workflows.
-      • Migrated legacy applications to containerized microservices on Docker Swarm
-      • Designed and implemented multi-environment CI/CD pipelines with GitHub Actions
-      • Reduced deployment time from 2 hours to 15 minutes through automation
-      • Implemented comprehensive monitoring with Prometheus, Grafana, and Loki
-    `,
-    logo: null,
-  },
-  {
-    id: "2",
-    title: "DevOps Engineer",
-    company: "CloudSoft",
-    location: "Istanbul, Turkey",
-    startDate: "2020-03",
-    endDate: "2021-12",
-    current: false,
-    description: `
-      Built and maintained cloud infrastructure on Azure for SaaS products.
-      • Architected Kubernetes clusters for production workloads
-      • Implemented infrastructure as code with Terraform and Bicep
-      • Set up disaster recovery and backup solutions
-      • Automated security compliance checks and vulnerability scanning
-    `,
-    logo: null,
-  },
-  {
-    id: "3",
-    title: "System Administrator",
-    company: "DataCenter Inc",
-    location: "Ankara, Turkey",
-    startDate: "2018-06",
-    endDate: "2020-02",
-    current: false,
-    description: `
-      Managed on-premise and hybrid infrastructure for enterprise clients.
-      • Administered Linux and Windows server environments
-      • Implemented centralized logging and monitoring solutions
-      • Managed network infrastructure including firewalls and VPNs
-      • Developed automation scripts for routine maintenance tasks
-    `,
-    logo: null,
-  },
-];
+interface Experience {
+  id: string;
+  title: string;
+  company: string;
+  location: string | null;
+  startDate: string;
+  endDate: string | null;
+  current: boolean;
+  description: string | null;
+  logo: string | null;
+}
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return "Present";
@@ -66,6 +24,36 @@ function formatDate(dateString: string | null): string {
 }
 
 export function ExperienceSection() {
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/experience")
+      .then((res) => res.json())
+      .then((data) => {
+        setExperiences(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch experiences:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <section id="experience" className="py-24 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="animate-pulse text-primary">Loading experiences...</div>
+        </div>
+      </section>
+    );
+  }
+
+  if (experiences.length === 0) {
+    return null;
+  }
+
   return (
     <section id="experience" className="py-24 px-6">
       <div className="max-w-4xl mx-auto">
@@ -111,13 +99,14 @@ export function ExperienceSection() {
               </div>
 
               {/* Content Card */}
-              <Card className="relative">
-                {/* Current Badge */}
+              <div className="relative">
+                {/* Current Badge - outside Card to avoid overflow-hidden */}
                 {exp.current && (
-                  <span className="absolute -top-3 right-4 px-3 py-1 text-xs font-mono bg-primary text-background rounded">
+                  <span className="absolute -top-3 right-4 z-10 px-3 py-1 text-xs font-mono bg-primary text-background rounded">
                     CURRENT
                   </span>
                 )}
+                <Card className="relative">
 
                 {/* Header */}
                 <div className="mb-4">
@@ -133,17 +122,22 @@ export function ExperienceSection() {
                     <Calendar size={14} />
                     {formatDate(exp.startDate)} - {formatDate(exp.endDate)}
                   </span>
-                  <span className="flex items-center gap-1">
-                    <MapPin size={14} />
-                    {exp.location}
-                  </span>
+                  {exp.location && (
+                    <span className="flex items-center gap-1">
+                      <MapPin size={14} />
+                      {exp.location}
+                    </span>
+                  )}
                 </div>
 
                 {/* Description */}
-                <div className="text-text-muted text-sm whitespace-pre-line">
-                  {exp.description.trim()}
-                </div>
+                {exp.description && (
+                  <div className="text-text-muted text-sm whitespace-pre-line">
+                    {exp.description.trim()}
+                  </div>
+                )}
               </Card>
+              </div>
             </motion.div>
           ))}
         </div>

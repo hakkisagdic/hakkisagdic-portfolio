@@ -18,15 +18,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { school, degree, field, startDate, endDate, description, order } = body;
+    const { school, degree, field, startDate, endDate, description, order, showDates } = body;
 
     const education = await prisma.education.create({
       data: {
         school,
         degree,
         field,
-        startDate: new Date(startDate),
+        startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
+        showDates: showDates ?? true,
         description,
         order: order || 0,
       },
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, startDate, endDate, ...rest } = body;
+    const { id, startDate, endDate, showDates, ...rest } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Education ID required" }, { status: 400 });
@@ -53,8 +54,9 @@ export async function PUT(request: NextRequest) {
       where: { id },
       data: {
         ...rest,
-        ...(startDate && { startDate: new Date(startDate) }),
+        ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
         ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+        ...(showDates !== undefined && { showDates }),
       },
     });
 

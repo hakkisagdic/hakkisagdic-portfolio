@@ -6,19 +6,58 @@ import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { clsx } from "clsx";
 
-const navItems = [
-  { label: "Home", href: "#home" },
-  { label: "About", href: "#about" },
-  { label: "Experience", href: "#experience" },
-  { label: "Skills", href: "#skills" },
-  { label: "Projects", href: "#projects" },
-  { label: "Contact", href: "#contact" },
+interface NavItem {
+  label: string;
+  href: string;
+  apiEndpoint?: string; // If set, check this API for data
+  alwaysShow?: boolean; // Always show regardless of data
+}
+
+const allNavItems: NavItem[] = [
+  { label: "Home", href: "#home", alwaysShow: true },
+  { label: "About", href: "#about", alwaysShow: true },
+  { label: "Experience", href: "#experience", apiEndpoint: "/api/experience" },
+  { label: "Skills", href: "#skills", apiEndpoint: "/api/skills" },
+  { label: "Certifications", href: "#certifications", apiEndpoint: "/api/certifications" },
+  { label: "Education", href: "#education", apiEndpoint: "/api/education" },
+  { label: "Projects", href: "#projects", apiEndpoint: "/api/projects" },
+  { label: "Contact", href: "#contact", alwaysShow: true },
 ];
 
 export function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeSection] = useState("home");
+  const [visibleNavItems, setVisibleNavItems] = useState<NavItem[]>(
+    allNavItems.filter(item => item.alwaysShow)
+  );
+
+  // Check which sections have data
+  useEffect(() => {
+    async function checkSectionData() {
+      const itemsWithData: NavItem[] = [];
+
+      for (const item of allNavItems) {
+        if (item.alwaysShow) {
+          itemsWithData.push(item);
+        } else if (item.apiEndpoint) {
+          try {
+            const res = await fetch(item.apiEndpoint);
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              itemsWithData.push(item);
+            }
+          } catch {
+            // Skip items that fail to fetch
+          }
+        }
+      }
+
+      setVisibleNavItems(itemsWithData);
+    }
+
+    checkSectionData();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -66,7 +105,7 @@ export function Navigation() {
 
             {/* Desktop Navigation */}
             <ul className="hidden md:flex items-center gap-8">
-              {navItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <li key={item.label}>
                   <Link
                     href={item.href}
@@ -112,7 +151,7 @@ export function Navigation() {
           >
             <nav className="flex flex-col items-center justify-center h-full">
               <ul className="flex flex-col items-center gap-8">
-                {navItems.map((item, index) => (
+                {visibleNavItems.map((item, index) => (
                   <motion.li
                     key={item.label}
                     initial={{ opacity: 0, y: 20 }}

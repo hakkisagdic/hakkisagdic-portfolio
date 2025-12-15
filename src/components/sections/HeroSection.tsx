@@ -1,17 +1,44 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { GlitchText, TypeWriter, Button } from "@/components/ui";
 import { ArrowDown, Github, Linkedin, Mail } from "lucide-react";
 
-const roles = [
+interface Profile {
+  name: string;
+  headline: string | null;
+  summary: string | null;
+  github: string | null;
+  linkedin: string | null;
+  email: string | null;
+}
+
+const defaultRoles = [
   "DevOps Engineer",
-  "Cloud Architect", 
+  "Cloud Architect",
   "Infrastructure Specialist",
-  "Docker & Kubernetes Expert",
 ];
 
 export function HeroSection() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((res) => res.json())
+      .then((data) => setProfile(data))
+      .catch((err) => console.error("Failed to fetch profile:", err));
+  }, []);
+
+  // Parse roles from headline (split by | or ,)
+  const roles = profile?.headline
+    ? profile.headline.split(/[|,]/).map((r) => r.trim()).filter(Boolean).slice(0, 4)
+    : defaultRoles;
+
+  const name = profile?.name || "Portfolio";
+  const summary = profile?.summary?.split(".").slice(0, 2).join(".") + "." ||
+    "Building resilient infrastructure and automating everything.";
+
   return (
     <section className="relative min-h-screen flex items-center justify-center px-6">
       <div className="max-w-4xl mx-auto text-center z-10">
@@ -34,8 +61,8 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="text-5xl md:text-7xl lg:text-8xl font-heading font-bold mb-6"
         >
-          <GlitchText 
-            text="HAKKI SAĞDIÇ" 
+          <GlitchText
+            text={name.toUpperCase()}
             className="text-text"
             glitchOnHover
             intensity="medium"
@@ -66,8 +93,7 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="text-text-muted max-w-2xl mx-auto mb-10 text-lg"
         >
-          Building resilient infrastructure and automating everything. 
-          Specialized in Docker Swarm, Kubernetes, Azure, and cloud-native solutions.
+          {summary}
         </motion.p>
 
         {/* CTA Buttons */}
@@ -77,12 +103,19 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.4 }}
           className="flex flex-wrap gap-4 justify-center mb-12"
         >
-          <Button variant="primary" size="lg">
-            View Projects
-          </Button>
-          <Button variant="accent" size="lg">
-            Contact Me
-          </Button>
+          {profile?.github && (
+            <a href={profile.github} target="_blank" rel="noopener noreferrer">
+              <Button variant="primary" size="lg">
+                <Github className="mr-2" size={18} />
+                View GitHub
+              </Button>
+            </a>
+          )}
+          <a href="#contact">
+            <Button variant="accent" size="lg">
+              Contact Me
+            </Button>
+          </a>
         </motion.div>
 
         {/* Social Links */}
@@ -92,28 +125,24 @@ export function HeroSection() {
           transition={{ duration: 0.5, delay: 0.5 }}
           className="flex gap-6 justify-center"
         >
-          <a
-            href="https://github.com/hakkisagdic"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-text-muted hover:text-primary transition-colors duration-300 hover:drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]"
-          >
-            <Github size={24} />
-          </a>
-          <a
-            href="https://linkedin.com/in/hakkisagdic"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-text-muted hover:text-primary transition-colors duration-300 hover:drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]"
-          >
-            <Linkedin size={24} />
-          </a>
-          <a
-            href="mailto:hakkisagdic@gmail.com"
-            className="text-text-muted hover:text-primary transition-colors duration-300 hover:drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]"
-          >
-            <Mail size={24} />
-          </a>
+          {profile?.linkedin && (
+            <a
+              href={profile.linkedin}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text-muted hover:text-primary transition-colors duration-300 hover:drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+            >
+              <Linkedin size={24} />
+            </a>
+          )}
+          {profile?.email && (
+            <a
+              href={`mailto:${profile.email}`}
+              className="text-text-muted hover:text-primary transition-colors duration-300 hover:drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]"
+            >
+              <Mail size={24} />
+            </a>
+          )}
         </motion.div>
       </div>
 

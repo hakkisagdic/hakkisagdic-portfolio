@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -73,8 +74,9 @@ model Education {
   school      String
   degree      String
   field       String?
-  startDate   DateTime
+  startDate   DateTime?
   endDate     DateTime?
+  showDates   Boolean   @default(true)
   description String?   @db.Text
   order       Int       @default(0)
   createdAt   DateTime  @default(now())
@@ -142,6 +144,20 @@ model ContactMessage {
   read      Boolean  @default(false)
   replied   Boolean  @default(false)
   createdAt DateTime @default(now())
+}
+
+// ============================================================================
+// HIGHLIGHTS (About Section)
+// ============================================================================
+
+model Highlight {
+  id          String   @id @default(cuid())
+  icon        String   // lucide-react icon name: Container, Cloud, GitBranch, etc.
+  title       String
+  description String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ============================================================================

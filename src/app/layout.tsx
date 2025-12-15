@@ -63,8 +63,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html 
-      lang="tr" 
+    <html
+      lang="en"
       className={`${orbitron.variable} ${rajdhani.variable} ${jetbrainsMono.variable}`}
     >
       <body className="min-h-screen bg-background text-text overflow-x-hidden">

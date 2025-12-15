@@ -22,6 +22,15 @@ interface LinkedInSkill {
   Name: string;
 }
 
+interface LinkedInCertification {
+  Name: string;
+  Url?: string;
+  Authority?: string;
+  "Started On"?: string;
+  "Finished On"?: string;
+  "License Number"?: string;
+}
+
 interface LinkedInProfile {
   "First Name": string;
   "Last Name": string;
@@ -30,22 +39,48 @@ interface LinkedInProfile {
   "Email Address"?: string;
 }
 
-// Parse CSV content
+// Parse CSV content with proper handling of quoted fields
 function parseCSV(content: string): Record<string, string>[] {
   const lines = content.trim().split("\n");
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+  // Parse a single CSV line handling quoted fields with commas
+  function parseCSVLine(line: string): string[] {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  const headers = parseCSVLine(lines[0]);
   const rows: Record<string, string>[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].match(/("([^"]*)"|[^,]*)/g) || [];
+    if (!lines[i].trim()) continue;
+    const values = parseCSVLine(lines[i]);
     const row: Record<string, string> = {};
 
     headers.forEach((header, index) => {
-      let value = values[index] || "";
-      value = value.trim().replace(/^"|"$/g, "");
-      row[header] = value;
+      row[header] = values[index] || "";
     });
 
     rows.push(row);
@@ -83,6 +118,7 @@ export async function POST(request: NextRequest) {
       experience: 0,
       education: 0,
       skills: 0,
+      certifications: 0,
     };
 
     // Process Profile.csv
@@ -158,13 +194,15 @@ export async function POST(request: NextRequest) {
         const startDate = parseLinkedInDate(row["Start Date"]);
         const endDate = parseLinkedInDate(row["End Date"] || "");
 
-        if (startDate) {
+        // Allow education entries even without dates (use fallback date)
+        const schoolName = row["School Name"];
+        if (schoolName) {
           await prisma.education.create({
             data: {
-              school: row["School Name"],
+              school: schoolName,
               degree: row["Degree Name"] || "Degree",
               description: row.Notes || null,
-              startDate,
+              startDate: startDate || new Date(2000, 0, 1), // Fallback to Jan 1, 2000
               endDate,
               order: i,
             },
@@ -194,6 +232,36 @@ export async function POST(request: NextRequest) {
             },
           });
           results.skills++;
+        }
+      }
+    }
+
+    // Process Certifications.csv
+    const certificationsFile = formData.get("certifications") as File | null;
+    if (certificationsFile) {
+      const content = await certificationsFile.text();
+      const rows = parseCSV(content) as unknown as LinkedInCertification[];
+
+      await prisma.certification.deleteMany({});
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.Name) {
+          const issueDate = parseLinkedInDate(row["Started On"] || "");
+          const expireDate = parseLinkedInDate(row["Finished On"] || "");
+
+          await prisma.certification.create({
+            data: {
+              name: row.Name,
+              issuer: row.Authority || "Unknown",
+              issueDate: issueDate || new Date(),
+              expireDate,
+              credentialId: row["License Number"] || null,
+              url: row.Url || null,
+              order: i,
+            },
+          });
+          results.certifications++;
         }
       }
     }

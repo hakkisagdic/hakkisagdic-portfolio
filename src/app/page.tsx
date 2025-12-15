@@ -2,12 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { Navigation } from "@/components/layout";
-import { 
-  HeroSection, 
-  AboutSection, 
-  ExperienceSection, 
+import {
+  HeroSection,
+  AboutSection,
+  ExperienceSection,
   SkillsSection,
-  ContactSection 
+  CertificationsSection,
+  EducationSection,
+  ContactSection
 } from "@/components/sections";
 
 // Dynamic import for 3D scene to avoid SSR issues
@@ -33,6 +35,8 @@ export default function Home() {
         <AboutSection />
         <ExperienceSection />
         <SkillsSection />
+        <CertificationsSection />
+        <EducationSection />
         <ContactSection />
       </main>
 

@@ -5,11 +5,11 @@ import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { 
-  LayoutDashboard, 
-  User, 
-  Briefcase, 
-  GraduationCap, 
+import {
+  LayoutDashboard,
+  User,
+  Briefcase,
+  GraduationCap,
   Wrench,
   Settings,
   Upload,
@@ -18,13 +18,15 @@ import {
   X,
   FolderKanban,
   Award,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/profile", label: "Profile", icon: User },
+  { href: "/admin/highlights", label: "Highlights", icon: Sparkles },
   { href: "/admin/experience", label: "Experience", icon: Briefcase },
   { href: "/admin/education", label: "Education", icon: GraduationCap },
   { href: "/admin/skills", label: "Skills", icon: Wrench },

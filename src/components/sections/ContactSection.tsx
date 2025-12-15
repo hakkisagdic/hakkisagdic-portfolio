@@ -1,18 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button, Input, Textarea, Card } from "@/components/ui";
-import { Send, Mail, MapPin, Github, Linkedin, Twitter } from "lucide-react";
+import { Send, Mail, MapPin, Github, Linkedin, Twitter, Globe } from "lucide-react";
 
-const socialLinks = [
-  { icon: Github, href: "https://github.com/hakkisagdic", label: "GitHub" },
-  { icon: Linkedin, href: "https://linkedin.com/in/hakkisagdic", label: "LinkedIn" },
-  { icon: Twitter, href: "https://twitter.com/hakkisagdic", label: "Twitter" },
-  { icon: Mail, href: "mailto:hakkisagdic@gmail.com", label: "Email" },
-];
+interface Profile {
+  email: string | null;
+  location: string | null;
+  github: string | null;
+  linkedin: string | null;
+  twitter: string | null;
+  website: string | null;
+}
 
 export function ContactSection() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((res) => res.json())
+      .then((data) => setProfile(data))
+      .catch((err) => console.error("Failed to fetch profile:", err));
+  }, []);
+
+  const socialLinks = [
+    profile?.github && { icon: Github, href: profile.github, label: "GitHub" },
+    profile?.linkedin && { icon: Linkedin, href: profile.linkedin, label: "LinkedIn" },
+    profile?.twitter && { icon: Twitter, href: profile.twitter, label: "Twitter" },
+    profile?.email && { icon: Mail, href: `mailto:${profile.email}`, label: "Email" },
+  ].filter(Boolean) as { icon: typeof Github; href: string; label: string }[];
   const [formState, setFormState] = useState({
     name: "",
     email: "",
@@ -152,34 +169,59 @@ export function ContactSection() {
           >
             {/* Info Cards */}
             <div className="space-y-6 mb-8">
-              <Card>
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-lg bg-primary/10 text-primary">
-                    <Mail size={24} />
+              {profile?.email && (
+                <Card>
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-lg bg-primary/10 text-primary">
+                      <Mail size={24} />
+                    </div>
+                    <div>
+                      <p className="text-text-muted text-sm">Email</p>
+                      <a
+                        href={`mailto:${profile.email}`}
+                        className="text-text hover:text-primary transition-colors"
+                      >
+                        {profile.email}
+                      </a>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-text-muted text-sm">Email</p>
-                    <a 
-                      href="mailto:hakkisagdic@gmail.com" 
-                      className="text-text hover:text-primary transition-colors"
-                    >
-                      hakkisagdic@gmail.com
-                    </a>
-                  </div>
-                </div>
-              </Card>
+                </Card>
+              )}
 
-              <Card>
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-lg bg-accent/10 text-accent">
-                    <MapPin size={24} />
+              {profile?.location && (
+                <Card>
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-lg bg-accent/10 text-accent">
+                      <MapPin size={24} />
+                    </div>
+                    <div>
+                      <p className="text-text-muted text-sm">Location</p>
+                      <p className="text-text">{profile.location}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-text-muted text-sm">Location</p>
-                    <p className="text-text">Istanbul, Turkey</p>
+                </Card>
+              )}
+
+              {profile?.website && (
+                <Card>
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-lg bg-primary/10 text-primary">
+                      <Globe size={24} />
+                    </div>
+                    <div>
+                      <p className="text-text-muted text-sm">Website</p>
+                      <a
+                        href={profile.website}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-text hover:text-primary transition-colors"
+                      >
+                        {profile.website.replace(/^https?:\/\//, '')}
+                      </a>
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              )}
             </div>
 
             {/* Social Links */}

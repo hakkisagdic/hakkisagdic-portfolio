@@ -10,16 +10,18 @@ export default function ImportPage() {
     positions: File | null;
     education: File | null;
     skills: File | null;
+    certifications: File | null;
   }>({
     profile: null,
     positions: null,
     education: null,
     skills: null,
+    certifications: null,
   });
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
-    imported?: { profile: number; experience: number; education: number; skills: number };
+    imported?: { profile: number; experience: number; education: number; skills: number; certifications: number };
     error?: string;
   } | null>(null);
 
@@ -28,6 +30,7 @@ export default function ImportPage() {
     positions: useRef<HTMLInputElement>(null),
     education: useRef<HTMLInputElement>(null),
     skills: useRef<HTMLInputElement>(null),
+    certifications: useRef<HTMLInputElement>(null),
   };
 
   const handleFileSelect = (type: keyof typeof files, file: File | null) => {
@@ -48,6 +51,7 @@ export default function ImportPage() {
       if (files.positions) formData.append("positions", files.positions);
       if (files.education) formData.append("education", files.education);
       if (files.skills) formData.append("skills", files.skills);
+      if (files.certifications) formData.append("certifications", files.certifications);
 
       const res = await fetch("/api/import/linkedin", {
         method: "POST",
@@ -58,7 +62,7 @@ export default function ImportPage() {
       setResult(data);
 
       if (data.success) {
-        setFiles({ profile: null, positions: null, education: null, skills: null });
+        setFiles({ profile: null, positions: null, education: null, skills: null, certifications: null });
       }
     } catch {
       setResult({ success: false, error: "Import failed" });
@@ -72,6 +76,7 @@ export default function ImportPage() {
     { key: "positions" as const, label: "Positions.csv", desc: "Work experience" },
     { key: "education" as const, label: "Education.csv", desc: "Education history" },
     { key: "skills" as const, label: "Skills.csv", desc: "Skills list" },
+    { key: "certifications" as const, label: "Certifications.csv", desc: "Certifications & licenses" },
   ];
 
   return (
@@ -166,6 +171,7 @@ export default function ImportPage() {
                     <li>Experience: {result.imported.experience} entries</li>
                     <li>Education: {result.imported.education} entries</li>
                     <li>Skills: {result.imported.skills} entries</li>
+                    <li>Certifications: {result.imported.certifications} entries</li>
                   </ul>
                 )}
                 {result.error && <p className="mt-2 text-sm text-danger">{result.error}</p>}
