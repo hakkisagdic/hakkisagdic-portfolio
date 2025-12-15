@@ -3,20 +3,16 @@ name: Database Sync
 on:
   workflow_dispatch:
     inputs:
-      source_env:
-        description: 'Source environment'
+      source_stack:
+        description: 'Source stack name (e.g., hakkisagdic-portfolio or hakkisagdic-portfolio-dev)'
         required: true
-        type: choice
-        options:
-          - dev
-          - stg
-      target_env:
-        description: 'Target environment'
+        type: string
+        default: 'hakkisagdic-portfolio'
+      target_stack:
+        description: 'Target stack name (e.g., hakkisagdic-portfolio-prod)'
         required: true
-        type: choice
-        options:
-          - stg
-          - prod
+        type: string
+        default: 'hakkisagdic-portfolio-prod'
       sync_type:
         description: 'Sync type'
         required: true
@@ -32,7 +28,7 @@ env:
 jobs:
   sync-database:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.target_env }}
+    environment: prod
     steps:
       - uses: actions/checkout@v4
 
@@ -46,29 +42,13 @@ jobs:
           script: |
             set -e
 
-            SOURCE_ENV="${{ github.event.inputs.source_env }}"
-            TARGET_ENV="${{ github.event.inputs.target_env }}"
+            SOURCE_STACK="${{ github.event.inputs.source_stack }}"
+            TARGET_STACK="${{ github.event.inputs.target_stack }}"
             SYNC_TYPE="${{ github.event.inputs.sync_type }}"
 
-            # Environment suffix mapping
-            case $SOURCE_ENV in
-              dev) SOURCE_SUFFIX="dev" ;;
-              stg) SOURCE_SUFFIX="stg" ;;
-              prod) SOURCE_SUFFIX="prod" ;;
-            esac
-
-            case $TARGET_ENV in
-              dev) TARGET_SUFFIX="dev" ;;
-              stg) TARGET_SUFFIX="stg" ;;
-              prod) TARGET_SUFFIX="prod" ;;
-            esac
-
-            SOURCE_STACK="${{ env.CUSTOMER_NAME }}-${SOURCE_SUFFIX}"
-            TARGET_STACK="${{ env.CUSTOMER_NAME }}-${TARGET_SUFFIX}"
-
             echo "=== Database Sync ==="
-            echo "Source: ${SOURCE_STACK}"
-            echo "Target: ${TARGET_STACK}"
+            echo "Source Stack: ${SOURCE_STACK}"
+            echo "Target Stack: ${TARGET_STACK}"
             echo "Type: ${SYNC_TYPE}"
             echo ""
 
@@ -137,4 +117,4 @@ jobs:
 
             echo ""
             echo "=== Sync Complete ==="
-            echo "🎉 Database sync from ${SOURCE_ENV} to ${TARGET_ENV} completed!"
+            echo "🎉 Database sync from ${SOURCE_STACK} to ${TARGET_STACK} completed!"
