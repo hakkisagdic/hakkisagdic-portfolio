@@ -30,6 +30,7 @@ on:
           - data_only
           - schema_and_data
           - seed_only
+          - reset_schema
           - debug
 
 env:
@@ -144,7 +145,22 @@ jobs:
             echo "Source DB container: $SOURCE_DB"
             echo "Target DB container: $TARGET_DB"
 
-            if [ "$SYNC_TYPE" = "seed_only" ]; then
+            if [ "$SYNC_TYPE" = "reset_schema" ]; then
+              echo "🔄 Resetting database schema..."
+              # Drop everything including _prisma_migrations
+              docker exec $TARGET_DB psql -U portfolio -d portfolio -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+              echo "✅ Schema dropped and recreated"
+
+              # Force redeploy to trigger fresh migrations
+              echo "🔄 Forcing service update to trigger migrations..."
+              docker service update --force ${TARGET_STACK}_portfolio
+
+              echo "⏳ Waiting for services to restart..."
+              sleep 30
+
+              echo "✅ Schema reset complete! Services should run migrations on startup."
+              exit 0
+            elif [ "$SYNC_TYPE" = "seed_only" ]; then
               echo "Running Prisma seed on target..."
               TARGET_APP=$(docker ps -q -f "name=${TARGET_STACK}_portfolio" | head -1)
               if [ -n "$TARGET_APP" ]; then
