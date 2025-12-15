@@ -1,0 +1,133 @@
+name: Database Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_env:
+        description: 'Source environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - stg
+      target_env:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - stg
+          - prod
+      sync_type:
+        description: 'Sync type'
+        required: true
+        type: choice
+        options:
+          - data_only
+          - schema_and_data
+          - seed_only
+
+env:
+  CUSTOMER_NAME: ${{ vars.CUSTOMER_NAME }}
+
+jobs:
+  sync-database:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target_env }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync Database
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          envs: CUSTOMER_NAME
+          script: |
+            set -e
+
+            SOURCE_ENV="${{ github.event.inputs.source_env }}"
+            TARGET_ENV="${{ github.event.inputs.target_env }}"
+            SYNC_TYPE="${{ github.event.inputs.sync_type }}"
+
+            # Environment suffix mapping
+            case $SOURCE_ENV in
+              dev) SOURCE_SUFFIX="dev" ;;
+              stg) SOURCE_SUFFIX="stg" ;;
+              prod) SOURCE_SUFFIX="prod" ;;
+            esac
+
+            case $TARGET_ENV in
+              dev) TARGET_SUFFIX="dev" ;;
+              stg) TARGET_SUFFIX="stg" ;;
+              prod) TARGET_SUFFIX="prod" ;;
+            esac
+
+            SOURCE_STACK="${{ env.CUSTOMER_NAME }}-${SOURCE_SUFFIX}"
+            TARGET_STACK="${{ env.CUSTOMER_NAME }}-${TARGET_SUFFIX}"
+
+            echo "=== Database Sync ==="
+            echo "Source: ${SOURCE_STACK}"
+            echo "Target: ${TARGET_STACK}"
+            echo "Type: ${SYNC_TYPE}"
+            echo ""
+
+            # Get container IDs
+            SOURCE_DB=$(docker ps -q -f "name=${SOURCE_STACK}_db")
+            TARGET_DB=$(docker ps -q -f "name=${TARGET_STACK}_db")
+
+            if [ -z "$SOURCE_DB" ]; then
+              echo "❌ Source database container not found!"
+              exit 1
+            fi
+
+            if [ -z "$TARGET_DB" ]; then
+              echo "❌ Target database container not found!"
+              exit 1
+            fi
+
+            echo "Source DB container: $SOURCE_DB"
+            echo "Target DB container: $TARGET_DB"
+
+            if [ "$SYNC_TYPE" = "seed_only" ]; then
+              echo "Running Prisma seed on target..."
+              TARGET_APP=$(docker ps -q -f "name=${TARGET_STACK}_portfolio" | head -1)
+              if [ -n "$TARGET_APP" ]; then
+                docker exec $TARGET_APP npx prisma db seed
+              else
+                echo "❌ Target app container not found for seeding!"
+                exit 1
+              fi
+            else
+              # Dump from source
+              echo "📤 Dumping data from source database..."
+              DUMP_FILE="/tmp/db_dump_${SOURCE_SUFFIX}_$(date +%Y%m%d_%H%M%S).sql"
+
+              if [ "$SYNC_TYPE" = "data_only" ]; then
+                docker exec $SOURCE_DB pg_dump -U portfolio --data-only --disable-triggers portfolio > $DUMP_FILE
+              else
+                docker exec $SOURCE_DB pg_dump -U portfolio portfolio > $DUMP_FILE
+              fi
+
+              echo "✅ Dump created: $DUMP_FILE ($(wc -c < $DUMP_FILE) bytes)"
+
+              # Import to target
+              echo "📥 Importing data to target database..."
+
+              if [ "$SYNC_TYPE" = "schema_and_data" ]; then
+                # Drop and recreate all tables
+                docker exec $TARGET_DB psql -U portfolio -d portfolio -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+              fi
+
+              # Import the dump
+              docker exec -i $TARGET_DB psql -U portfolio -d portfolio < $DUMP_FILE
+
+              echo "✅ Data imported successfully!"
+
+              # Cleanup
+              rm -f $DUMP_FILE
+            fi
+
+            echo ""
+            echo "=== Sync Complete ==="
+            echo "🎉 Database sync from ${SOURCE_ENV} to ${TARGET_ENV} completed!"
