@@ -2,13 +2,13 @@ name: Deploy Customer Stack
 
 on:
   push:
-    branches: 
+    branches:
       - dev
       - staging
       - main
     tags: ['v*']
   pull_request:
-    branches: [main, staging, dev]
+    branches: [main, staging]
   workflow_dispatch:
     inputs:
       environment:
@@ -26,13 +26,16 @@ env:
   IMAGE_NAME: ${{ vars.CUSTOMER_NAME }}/app
 
 jobs:
+  # ===========================================================================
+  # BUILD - Runs on all pushes
+  # ===========================================================================
   build:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Generate version
         id: version
         run: |
@@ -42,10 +45,10 @@ jobs:
             VERSION=sha-${GITHUB_SHA::8}
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-      
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
+
       - name: Login to ACR
         if: github.event_name != 'pull_request'
         uses: azure/docker-login@v1
@@ -53,7 +56,7 @@ jobs:
           login-server: ${{ env.ACR_NAME }}.azurecr.io
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
-      
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -74,7 +77,7 @@ jobs:
     environment: dev
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -84,7 +87,7 @@ jobs:
           source: "docker-compose.yml"
           target: "/tmp/${{ env.CUSTOMER_NAME }}"
           strip_components: 0
-      
+
       - name: Deploy to DEV
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -94,18 +97,18 @@ jobs:
           envs: CUSTOMER_NAME,ACR_NAME
           script: |
             set -e
-            
+
             DEPLOY_DIR="/opt/swarm/customers/${{ env.CUSTOMER_NAME }}"
             VERSION="${{ needs.build.outputs.version }}"
-            
+
             sudo mkdir -p "$DEPLOY_DIR"
             sudo chown $USER:$USER "$DEPLOY_DIR"
-            
+
             cp "/tmp/${{ env.CUSTOMER_NAME }}/docker-compose.yml" "$DEPLOY_DIR/docker-compose.yml"
             rm -rf "/tmp/${{ env.CUSTOMER_NAME }}"
-            
+
             cd "$DEPLOY_DIR"
-            
+
             # DEV environment: dev.domain.com, 1 replica
             echo "Updating .env file for DEV..."
             cat > .env << EOF
@@ -120,15 +123,15 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             EOF
-            
+
             echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-            
+
             source .env
             export VERSION ACR_NAME CUSTOMER_NAME DOMAIN REPLICAS DB_PASSWORD NEXTAUTH_SECRET
             cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
-            
+
             docker stack deploy -c docker-compose.rendered.yml --with-registry-auth ${{ env.CUSTOMER_NAME }}
-            
+
             sleep 30
             echo "=== Stack Services ==="
             docker stack services ${{ env.CUSTOMER_NAME }}
@@ -136,7 +139,57 @@ jobs:
             echo "🌐 URL: https://dev.${{ vars.DOMAIN }}"
 
   # ===========================================================================
-  # STAGING Deployment - Triggered by push to 'staging' branch
+  # Create Draft PR to Staging - After successful DEV deployment
+  # ===========================================================================
+  create-staging-pr:
+    needs: deploy-dev
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING_PR=$(gh pr list --head dev --base staging --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "existing_pr=$EXISTING_PR" >> $GITHUB_OUTPUT
+            echo "PR #$EXISTING_PR already exists"
+          else
+            echo "existing_pr=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Draft PR to Staging
+        if: steps.check-pr.outputs.existing_pr == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base staging \
+            --head dev \
+            --title "🚀 Deploy to Staging: $(git log -1 --pretty=%s)" \
+            --body "## Auto-generated PR from DEV deployment
+
+          ### Changes
+          $(git log staging..dev --oneline 2>/dev/null || echo 'New changes from dev branch')
+
+          ### Deployment Flow
+          1. ✅ DEV deployment successful
+          2. ⏳ Review and approve this PR
+          3. 🕐 5 minute wait timer after merge
+          4. 🚀 Auto-deploy to STAGING
+
+          ---
+          _This PR was automatically created after successful DEV deployment._" \
+            --draft
+
+  # ===========================================================================
+  # STAGING Deployment - Triggered by push to 'staging' branch (PR merge)
+  # Environment has 5 minute wait timer
   # ===========================================================================
   deploy-staging:
     needs: build
@@ -145,7 +198,7 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -154,7 +207,7 @@ jobs:
           key: ${{ secrets.SWARM_SSH_KEY }}
           source: "docker-compose.yml"
           target: "/tmp/${{ env.CUSTOMER_NAME }}"
-      
+
       - name: Deploy to STAGING
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -164,17 +217,17 @@ jobs:
           envs: CUSTOMER_NAME,ACR_NAME
           script: |
             set -e
-            
+
             DEPLOY_DIR="/opt/swarm/customers/${{ env.CUSTOMER_NAME }}"
             VERSION="${{ needs.build.outputs.version }}"
-            
+
             sudo mkdir -p "$DEPLOY_DIR"
             sudo chown $USER:$USER "$DEPLOY_DIR"
             cp "/tmp/${{ env.CUSTOMER_NAME }}/docker-compose.yml" "$DEPLOY_DIR/docker-compose.yml"
             rm -rf "/tmp/${{ env.CUSTOMER_NAME }}"
-            
+
             cd "$DEPLOY_DIR"
-            
+
             # STAGING environment: stg.domain.com, 1 replica
             cat > .env << EOF
             # Auto-generated by CI/CD - $(date)
@@ -188,21 +241,78 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             EOF
-            
+
             echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-            
+
             source .env
             export VERSION ACR_NAME CUSTOMER_NAME DOMAIN REPLICAS DB_PASSWORD NEXTAUTH_SECRET
             cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
             docker stack deploy -c docker-compose.rendered.yml --with-registry-auth ${{ env.CUSTOMER_NAME }}
-            
+
             sleep 30
             docker stack services ${{ env.CUSTOMER_NAME }}
             echo "=== STAGING Deployment Complete ==="
             echo "🌐 URL: https://stg.${{ vars.DOMAIN }}"
 
   # ===========================================================================
-  # PROD Deployment - Triggered by push to 'main' branch OR v* tag
+  # Create Draft PR to Production - After successful STAGING deployment
+  # ===========================================================================
+  create-prod-pr:
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for existing PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          EXISTING_PR=$(gh pr list --head staging --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "existing_pr=$EXISTING_PR" >> $GITHUB_OUTPUT
+            echo "PR #$EXISTING_PR already exists"
+          else
+            echo "existing_pr=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Draft PR to Production
+        if: steps.check-pr.outputs.existing_pr == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head staging \
+            --title "🚀 Deploy to Production: $(git log -1 --pretty=%s)" \
+            --body "## Auto-generated PR from STAGING deployment
+
+          ### Changes
+          $(git log main..staging --oneline 2>/dev/null || echo 'New changes from staging branch')
+
+          ### Deployment Flow
+          1. ✅ DEV deployment successful
+          2. ✅ STAGING deployment successful
+          3. ⏳ Review and approve this PR
+          4. 🕐 5 minute wait timer after merge
+          5. 🚀 Auto-deploy to PRODUCTION
+
+          ### Pre-Production Checklist
+          - [ ] Staging environment tested
+          - [ ] No critical bugs found
+          - [ ] Performance acceptable
+          - [ ] Ready for production
+
+          ---
+          _This PR was automatically created after successful STAGING deployment._" \
+            --draft
+
+  # ===========================================================================
+  # PROD Deployment - Triggered by push to 'main' branch (PR merge) OR v* tag
+  # Environment has 5 minute wait timer + required reviewer approval
   # ===========================================================================
   deploy-prod:
     needs: build
@@ -211,7 +321,7 @@ jobs:
     environment: prod
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -220,7 +330,7 @@ jobs:
           key: ${{ secrets.SWARM_SSH_KEY }}
           source: "docker-compose.yml"
           target: "/tmp/${{ env.CUSTOMER_NAME }}"
-      
+
       - name: Deploy to PRODUCTION
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -230,22 +340,22 @@ jobs:
           envs: CUSTOMER_NAME,ACR_NAME
           script: |
             set -e
-            
+
             DEPLOY_DIR="/opt/swarm/customers/${{ env.CUSTOMER_NAME }}"
             VERSION="${{ needs.build.outputs.version }}"
-            
+
             sudo mkdir -p "$DEPLOY_DIR"
             sudo chown $USER:$USER "$DEPLOY_DIR"
             cp "/tmp/${{ env.CUSTOMER_NAME }}/docker-compose.yml" "$DEPLOY_DIR/docker-compose.yml"
             rm -rf "/tmp/${{ env.CUSTOMER_NAME }}"
-            
+
             cd "$DEPLOY_DIR"
-            
+
             # Backup existing .env
             if [ -f .env ]; then
               cp .env ".env.backup.$(date +%Y%m%d_%H%M%S)"
             fi
-            
+
             # PROD environment: domain.com + www.domain.com, 2 replicas for HA
             cat > .env << EOF
             # Auto-generated by CI/CD - $(date)
@@ -259,14 +369,14 @@ jobs:
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
             EOF
-            
+
             echo "${{ secrets.ACR_PASSWORD }}" | docker login ${{ env.ACR_NAME }}.azurecr.io -u ${{ secrets.ACR_USERNAME }} --password-stdin
-            
+
             source .env
             export VERSION ACR_NAME CUSTOMER_NAME DOMAIN REPLICAS DB_PASSWORD NEXTAUTH_SECRET
             cat docker-compose.yml | sed "s/\${VERSION:-latest}/$VERSION/g" | sed "s/\${REPLICAS:-1}/$REPLICAS/g" | envsubst > docker-compose.rendered.yml
             docker stack deploy -c docker-compose.rendered.yml --with-registry-auth ${{ env.CUSTOMER_NAME }}
-            
+
             sleep 30
             echo "=== Stack Services ==="
             docker stack services ${{ env.CUSTOMER_NAME }}
