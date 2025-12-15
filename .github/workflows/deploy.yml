@@ -448,6 +448,7 @@ jobs:
             db_pwd = '''${{ secrets.DB_PASSWORD }}'''
             nextauth = '''${{ secrets.NEXTAUTH_SECRET }}'''
             customer_name = '''${{ env.CUSTOMER_NAME }}'''
+            domain = '''${{ vars.DOMAIN }}'''
             stack_name = os.environ.get('STACK_NAME', customer_name)
             with open('docker-compose.rendered.yml', 'r') as f:
                 content = f.read()
@@ -456,6 +457,24 @@ jobs:
             # Update Traefik router names to be unique per environment
             content = content.replace(f'routers.{customer_name}', f'routers.{stack_name}')
             content = content.replace(f'services.{customer_name}', f'services.{stack_name}')
+            content = content.replace(f'middlewares.{customer_name}', f'middlewares.{stack_name}')
+
+            # PROD only: Add redirect from non-www to www
+            # Insert redirect middleware after the non-www router's tls line
+            redirect_labels = f'''
+        - "traefik.http.routers.{stack_name}.middlewares={stack_name}-redirect-www"
+        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.regex=^https://{domain}(.*)"
+        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.replacement=https://www.{domain}$$${{1}}"
+        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.permanent=true"'''
+
+            # Find the non-www router's tls line and add redirect after it
+            search = f'- "traefik.http.routers.{stack_name}.tls.certresolver=letsencrypt"'
+            if search in content:
+                content = content.replace(search, search + redirect_labels, 1)
+
+            # Also update NEXTAUTH_URL to use www for PROD
+            content = content.replace(f'NEXTAUTH_URL=https://{domain}', f'NEXTAUTH_URL=https://www.{domain}')
+
             with open('docker-compose.rendered.yml', 'w') as f:
                 f.write(content)
             PYEOF
@@ -466,4 +485,5 @@ jobs:
             echo "=== Stack Services ==="
             docker stack services ${STACK_NAME}
             echo "=== PRODUCTION Deployment Complete ==="
-            echo "🌐 URLs: https://${{ vars.DOMAIN }} and https://www.${{ vars.DOMAIN }}"
+            echo "🌐 Primary URL: https://www.${{ vars.DOMAIN }}"
+            echo "🔄 Redirect: https://${{ vars.DOMAIN }} -> https://www.${{ vars.DOMAIN }}"

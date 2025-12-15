@@ -16,19 +16,15 @@ services:
       replicas: ${REPLICAS:-1}
       labels:
         - "traefik.enable=true"
-        # Main router - uses DOMAIN directly (dev.domain / stg.domain / domain)
+        # Main router - serves the application
         - "traefik.http.routers.${CUSTOMER_NAME}.rule=Host(`${DOMAIN}`)"
         - "traefik.http.routers.${CUSTOMER_NAME}.entrypoints=websecure"
         - "traefik.http.routers.${CUSTOMER_NAME}.tls.certresolver=letsencrypt"
         - "traefik.http.services.${CUSTOMER_NAME}.loadbalancer.server.port=3000"
-        # WWW redirect router (only for prod domain without prefix)
+        # WWW router - also serves application (for PROD www.domain)
         - "traefik.http.routers.${CUSTOMER_NAME}-www.rule=Host(`www.${DOMAIN}`)"
         - "traefik.http.routers.${CUSTOMER_NAME}-www.entrypoints=websecure"
         - "traefik.http.routers.${CUSTOMER_NAME}-www.tls.certresolver=letsencrypt"
-        - "traefik.http.routers.${CUSTOMER_NAME}-www.middlewares=${CUSTOMER_NAME}-www-redirect"
-        - "traefik.http.middlewares.${CUSTOMER_NAME}-www-redirect.redirectregex.regex=^https://www\\.(.*)"
-        - "traefik.http.middlewares.${CUSTOMER_NAME}-www-redirect.redirectregex.replacement=https://$${1}"
-        - "traefik.http.middlewares.${CUSTOMER_NAME}-www-redirect.redirectregex.permanent=true"
       update_config:
         parallelism: 1
         delay: 10s
