@@ -439,10 +439,9 @@ jobs:
 
             # Second pass: Replace sensitive values using Python (handles special chars safely)
             # Also update Traefik router names to be environment-specific
-            # PROD uses shared database from base stack for simplicity
             export STACK_NAME
             python3 << 'PYEOF'
-            import sys, os, re
+            import sys, os
             db_pwd = '''${{ secrets.DB_PASSWORD }}'''
             nextauth = '''${{ secrets.NEXTAUTH_SECRET }}'''
             customer_name = '''${{ env.CUSTOMER_NAME }}'''
@@ -454,20 +453,9 @@ jobs:
             # Update Traefik router names to be unique per environment
             content = content.replace(f'routers.{customer_name}', f'routers.{stack_name}')
             content = content.replace(f'services.{customer_name}', f'services.{stack_name}')
-
-            # PROD connects to shared database (base stack's db)
-            # Remove db service and update DATABASE_URL to use shared db
-            content = re.sub(r'  db:.*?(?=\nnetworks:)', '', content, flags=re.DOTALL)
-            content = re.sub(r'\s+depends_on:\s+- db\n', '\n', content)
-            # Update DATABASE_URL to point to base stack's db service
-            content = content.replace('@db:5432', f'@{customer_name}_db:5432')
-
             with open('docker-compose.rendered.yml', 'w') as f:
                 f.write(content)
             PYEOF
-
-            # Ensure PROD app can reach the shared database
-            docker network create --driver overlay --attachable shared-db 2>/dev/null || true
 
             docker stack deploy -c docker-compose.rendered.yml --with-registry-auth ${STACK_NAME}
 
