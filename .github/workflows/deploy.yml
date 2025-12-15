@@ -463,7 +463,7 @@ jobs:
             redirect_lines = [
                 f'        - "traefik.http.routers.{stack_name}.middlewares={stack_name}-redirect-www"',
                 f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.regex=^https://{domain}(.*)"',
-                f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.replacement=https://www.{domain}$$$$1"',
+                f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.replacement=https://www.{domain}$$$${{{{1}}}}"',
                 f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.permanent=true"'
             ]
             redirect_labels = '\n' + '\n'.join(redirect_lines)
