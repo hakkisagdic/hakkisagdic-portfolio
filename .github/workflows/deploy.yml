@@ -482,6 +482,14 @@ jobs:
 
             docker stack deploy -c docker-compose.rendered.yml --with-registry-auth ${STACK_NAME}
 
+            # Remove old stack without -prod suffix (if exists) to prevent routing conflicts
+            OLD_STACK="${CUSTOMER_NAME}"
+            if docker stack ls | grep -q "^${OLD_STACK} "; then
+              echo "🧹 Removing old stack: ${OLD_STACK}"
+              docker stack rm ${OLD_STACK} || true
+              sleep 10
+            fi
+
             sleep 30
             echo "=== Stack Services ==="
             docker stack services ${STACK_NAME}
