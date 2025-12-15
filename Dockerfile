@@ -23,7 +23,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install OpenSSL for Prisma compatibility
+# Install OpenSSL for Prisma engine
 RUN apk add --no-cache openssl
 
 # Create non-root user

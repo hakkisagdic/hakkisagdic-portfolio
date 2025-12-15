@@ -1,0 +1,236 @@
+# =============================================================================
+# 🗑️ Customer Stack Destroy Workflow
+# =============================================================================
+# Bu workflow müşteri stack'ini güvenli şekilde siler.
+# 
+# Güvenlik:
+# - Sadece 'hakkisagdic' hesabı tetikleyebilir
+# - "DESTROY" yazarak onay gerektirir
+# - Silme seçenekleri ayrı ayrı kontrol edilebilir
+# =============================================================================
+
+name: 🗑️ Destroy Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      confirm_text:
+        description: 'Type "DESTROY" to confirm'
+        required: true
+        type: string
+      destroy_stack:
+        description: 'Remove Docker Stack'
+        required: true
+        type: boolean
+        default: true
+      destroy_volumes:
+        description: 'Remove Docker Volumes (DATABASE DATA WILL BE LOST!)'
+        required: true
+        type: boolean
+        default: false
+      destroy_acr_images:
+        description: 'Remove ACR Images'
+        required: true
+        type: boolean
+        default: false
+
+env:
+  CUSTOMER_NAME: ${{ vars.CUSTOMER_NAME }}
+  ACR_NAME: ${{ vars.ACR_NAME }}
+
+jobs:
+  # ===========================================================================
+  # Security Validation
+  # ===========================================================================
+  validate:
+    name: 🔐 Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check authorized user
+        run: |
+          ALLOWED_USERS="hakkisagdic"
+          ACTOR="${{ github.actor }}"
+          
+          if [[ ! " $ALLOWED_USERS " =~ " $ACTOR " ]]; then
+            echo "::error::❌ User '$ACTOR' is not authorized to run destroy workflow"
+            echo "::error::Only these users can destroy: $ALLOWED_USERS"
+            exit 1
+          fi
+          echo "✅ User '$ACTOR' is authorized"
+
+      - name: Validate confirmation
+        run: |
+          if [ "${{ inputs.confirm_text }}" != "DESTROY" ]; then
+            echo "::error::❌ Confirmation failed. You must type 'DESTROY' to proceed."
+            exit 1
+          fi
+          echo "✅ Destruction confirmed"
+
+      - name: Production warning
+        if: inputs.environment == 'prod'
+        run: |
+          echo "::warning::⚠️ YOU ARE ABOUT TO DESTROY PRODUCTION ENVIRONMENT!"
+          echo "::warning::This action is IRREVERSIBLE!"
+          sleep 5
+
+  # ===========================================================================
+  # Destroy Stack
+  # ===========================================================================
+  destroy-stack:
+    name: 🐳 Remove Docker Stack
+    needs: validate
+    if: inputs.destroy_stack == true
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Remove stack from Swarm
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          script: |
+            set -e
+            STACK_NAME="${{ env.CUSTOMER_NAME }}"
+            
+            echo "🔍 Checking if stack exists..."
+            if docker stack ls | grep -q "$STACK_NAME"; then
+              echo "🗑️ Removing stack: $STACK_NAME"
+              docker stack rm "$STACK_NAME"
+              
+              echo "⏳ Waiting for services to stop..."
+              sleep 15
+              
+              # Wait for network removal
+              for i in {1..30}; do
+                if ! docker network ls | grep -q "${STACK_NAME}_"; then
+                  echo "✅ Stack networks removed"
+                  break
+                fi
+                echo "Waiting for networks... ($i/30)"
+                sleep 2
+              done
+              
+              echo "✅ Stack '$STACK_NAME' removed successfully"
+            else
+              echo "ℹ️ Stack '$STACK_NAME' not found, skipping..."
+            fi
+
+      - name: Clean deployment directory
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          script: |
+            DEPLOY_DIR="/opt/swarm/customers/${{ env.CUSTOMER_NAME }}"
+            if [ -d "$DEPLOY_DIR" ]; then
+              echo "🗑️ Removing deployment directory..."
+              sudo rm -rf "$DEPLOY_DIR"
+              echo "✅ Deployment directory removed"
+            fi
+
+  # ===========================================================================
+  # Destroy Volumes (Optional - DESTRUCTIVE!)
+  # ===========================================================================
+  destroy-volumes:
+    name: 💾 Remove Volumes (DESTRUCTIVE!)
+    needs: [validate, destroy-stack]
+    if: always() && needs.validate.result == 'success' && inputs.destroy_volumes == true
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Remove Docker volumes
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          script: |
+            set -e
+            STACK_NAME="${{ env.CUSTOMER_NAME }}"
+            
+            echo "🔍 Finding volumes for stack: $STACK_NAME"
+            VOLUMES=$(docker volume ls -q --filter "name=${STACK_NAME}_" 2>/dev/null || echo "")
+            
+            if [ -n "$VOLUMES" ]; then
+              echo "🗑️ Removing volumes:"
+              echo "$VOLUMES"
+              echo ""
+              
+              for vol in $VOLUMES; do
+                echo "Removing: $vol"
+                docker volume rm "$vol" || echo "Warning: Could not remove $vol"
+              done
+              
+              echo "✅ Volumes removed"
+            else
+              echo "ℹ️ No volumes found for stack '$STACK_NAME'"
+            fi
+
+  # ===========================================================================
+  # Destroy ACR Images (Optional)
+  # ===========================================================================
+  destroy-acr-images:
+    name: 📦 Remove ACR Images
+    needs: validate
+    if: inputs.destroy_acr_images == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+
+      - name: Delete ACR repository
+        run: |
+          REPO_NAME="${{ env.CUSTOMER_NAME }}/app"
+          ACR_NAME="${{ env.ACR_NAME }}"
+          
+          echo "🔍 Checking repository: $REPO_NAME"
+          
+          if az acr repository show --name "$ACR_NAME" --repository "$REPO_NAME" &>/dev/null; then
+            echo "🗑️ Deleting repository: $REPO_NAME"
+            az acr repository delete --name "$ACR_NAME" --repository "$REPO_NAME" --yes
+            echo "✅ Repository deleted"
+          else
+            echo "ℹ️ Repository not found, skipping..."
+          fi
+
+  # ===========================================================================
+  # Summary
+  # ===========================================================================
+  summary:
+    name: 📋 Summary
+    needs: [validate, destroy-stack, destroy-volumes, destroy-acr-images]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🗑️ Destroy Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | \`${{ inputs.environment }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | \`${{ github.actor }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Stack | ${{ inputs.destroy_stack && '🗑️ Removed' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Volumes | ${{ inputs.destroy_volumes && '🗑️ Removed' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ACR Images | ${{ inputs.destroy_acr_images && '🗑️ Removed' || '⏭️ Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ *This action was performed at $(date -u '+%Y-%m-%d %H:%M:%S UTC')*" >> $GITHUB_STEP_SUMMARY
