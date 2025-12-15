@@ -72,17 +72,24 @@ jobs:
             echo "Type: ${SYNC_TYPE}"
             echo ""
 
-            # Get container IDs
-            SOURCE_DB=$(docker ps -q -f "name=${SOURCE_STACK}_db")
-            TARGET_DB=$(docker ps -q -f "name=${TARGET_STACK}_db")
+            # List all containers for debugging
+            echo "All running containers:"
+            docker ps --format "{{.Names}}" | grep -E "(db|portfolio)" || true
+            echo ""
+
+            # Get container IDs - use partial name match
+            SOURCE_DB=$(docker ps --format "{{.ID}} {{.Names}}" | grep "${SOURCE_STACK}_db" | awk '{print $1}' | head -1)
+            TARGET_DB=$(docker ps --format "{{.ID}} {{.Names}}" | grep "${TARGET_STACK}_db" | awk '{print $1}' | head -1)
 
             if [ -z "$SOURCE_DB" ]; then
-              echo "❌ Source database container not found!"
+              echo "❌ Source database container not found for stack: ${SOURCE_STACK}"
+              echo "Looking for: ${SOURCE_STACK}_db"
               exit 1
             fi
 
             if [ -z "$TARGET_DB" ]; then
-              echo "❌ Target database container not found!"
+              echo "❌ Target database container not found for stack: ${TARGET_STACK}"
+              echo "Looking for: ${TARGET_STACK}_db"
               exit 1
             fi
 
