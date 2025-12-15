@@ -460,12 +460,13 @@ jobs:
             content = content.replace(f'middlewares.{customer_name}', f'middlewares.{stack_name}')
 
             # PROD only: Add redirect from non-www to www
-            # Insert redirect middleware after the non-www router's tls line
-            redirect_labels = f'''
-        - "traefik.http.routers.{stack_name}.middlewares={stack_name}-redirect-www"
-        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.regex=^https://{domain}(.*)"
-        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.replacement=https://www.{domain}$$${{1}}"
-        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.permanent=true"'''
+            redirect_lines = [
+                f'        - "traefik.http.routers.{stack_name}.middlewares={stack_name}-redirect-www"',
+                f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.regex=^https://{domain}(.*)"',
+                f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.replacement=https://www.{domain}$${{1}}"',
+                f'        - "traefik.http.middlewares.{stack_name}-redirect-www.redirectregex.permanent=true"'
+            ]
+            redirect_labels = '\n' + '\n'.join(redirect_lines)
 
             # Find the non-www router's tls line and add redirect after it
             search = f'- "traefik.http.routers.{stack_name}.tls.certresolver=letsencrypt"'
