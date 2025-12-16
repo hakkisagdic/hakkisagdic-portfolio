@@ -1,0 +1,130 @@
+name: Stack Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: 'dev'
+      stack_name:
+        description: 'Stack name to remove'
+        required: true
+        type: string
+      cleanup_volumes:
+        description: 'Also remove associated volumes (DANGEROUS)'
+        required: true
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run (only show what would be removed)'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  CUSTOMER_NAME: ${{ vars.CUSTOMER_NAME }}
+
+jobs:
+  cleanup-stack:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cleanup Stack
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SWARM_HOST }}
+          username: ${{ secrets.SWARM_USER }}
+          key: ${{ secrets.SWARM_SSH_KEY }}
+          envs: CUSTOMER_NAME
+          script: |
+            set -e
+
+            STACK_NAME="${{ github.event.inputs.stack_name }}"
+            CLEANUP_VOLUMES="${{ github.event.inputs.cleanup_volumes }}"
+            DRY_RUN="${{ github.event.inputs.dry_run }}"
+
+            echo "=== Stack Cleanup ==="
+            echo "Stack: $STACK_NAME"
+            echo "Environment: ${{ github.event.inputs.environment }}"
+            echo "Cleanup Volumes: $CLEANUP_VOLUMES"
+            echo "Dry Run: $DRY_RUN"
+            echo ""
+
+            # Check if stack exists
+            if ! docker stack ls | grep -q "^${STACK_NAME} "; then
+              echo "❌ Stack '$STACK_NAME' not found!"
+              echo ""
+              echo "Available stacks:"
+              docker stack ls
+              exit 1
+            fi
+
+            # Show stack services
+            echo "📋 Stack services to be removed:"
+            docker stack services "$STACK_NAME"
+            echo ""
+
+            # Find associated volumes
+            echo "📋 Volumes that might be associated:"
+            docker volume ls | grep -E "${STACK_NAME}" || echo "No matching volumes found"
+            echo ""
+
+            # Find exited containers from this stack
+            echo "📋 Exited containers from this stack:"
+            docker ps -a --filter "status=exited" --format "{{.Names}}" | grep "${STACK_NAME}" || echo "No exited containers found"
+            echo ""
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "🔍 DRY RUN - No changes will be made"
+              echo ""
+              echo "Would execute:"
+              echo "  docker stack rm $STACK_NAME"
+              if [ "$CLEANUP_VOLUMES" = "true" ]; then
+                echo "  docker volume rm (associated volumes)"
+              fi
+              echo "  docker container prune -f"
+              exit 0
+            fi
+
+            # Remove the stack
+            echo "🗑️ Removing stack '$STACK_NAME'..."
+            docker stack rm "$STACK_NAME"
+
+            # Wait for services to be removed
+            echo "⏳ Waiting for services to be removed..."
+            sleep 15
+
+            # Check if services are removed
+            while docker stack services "$STACK_NAME" 2>/dev/null | grep -q "$STACK_NAME"; do
+              echo "Still waiting..."
+              sleep 5
+            done
+
+            echo "✅ Stack removed"
+
+            # Clean up volumes if requested
+            if [ "$CLEANUP_VOLUMES" = "true" ]; then
+              echo ""
+              echo "🗑️ Removing associated volumes..."
+              docker volume ls -q | grep "${STACK_NAME}" | xargs -r docker volume rm || true
+              echo "✅ Volumes cleaned"
+            fi
+
+            # Clean up exited containers
+            echo ""
+            echo "🧹 Cleaning up exited containers..."
+            docker container prune -f
+
+            echo ""
+            echo "=== Cleanup Complete ==="
+            echo ""
+            echo "📋 Remaining stacks:"
+            docker stack ls
