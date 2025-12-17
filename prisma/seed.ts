@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   // Admin kullanıcı oluştur
   const hashedPassword = await bcrypt.hash("admin123", 12);
-  
+
   const admin = await prisma.user.upsert({
     where: { email: "admin@hakkisagdic.dev" },
     update: {},
@@ -27,7 +27,7 @@ async function main() {
     create: {
       id: "default",
       siteTitle: "Hakkı Sağdıç",
-      siteDescription: "DevOps Engineer Portfolio",
+      siteDescription: "AI Engineer & DevOps Specialist Portfolio",
       theme: "cyberpunk",
       primaryColor: "#00f0ff",
       accentColor: "#f000ff",
@@ -48,8 +48,8 @@ async function main() {
     create: {
       id: "default",
       name: "Hakkı Sağdıç",
-      headline: "DevOps Engineer",
-      summary: "Experienced DevOps Engineer specializing in Docker, Kubernetes, Azure, and cloud-native solutions.",
+      headline: "AI Engineer & DevOps Specialist",
+      summary: "AI Engineer specializing in LLMs, ML pipelines, and intelligent automation. DevOps expert with Docker, Kubernetes, Azure, and cloud-native solutions.",
       location: "Istanbul, Turkey",
       email: "hakki@hakkisagdic.dev",
       linkedin: "https://linkedin.com/in/hakkisagdic",
@@ -58,6 +58,67 @@ async function main() {
   });
 
   console.log("✅ Default profile created");
+
+  // Highlights (About section cards) - AI focused
+  const highlights = [
+    {
+      id: "hl1",
+      icon: "Brain",
+      title: "AI & Machine Learning",
+      description: "Building intelligent systems with LLMs, ML pipelines, and AI-powered automation",
+      order: 0,
+    },
+    {
+      id: "hl2",
+      icon: "Bot",
+      title: "AI Engineering",
+      description: "Developing AI agents, chatbots, and generative AI applications with modern frameworks",
+      order: 1,
+    },
+    {
+      id: "hl3",
+      icon: "Cloud",
+      title: "Cloud Architecture",
+      description: "Azure & multi-cloud specialist designing scalable AI-ready infrastructure",
+      order: 2,
+    },
+    {
+      id: "hl4",
+      icon: "Workflow",
+      title: "DevOps & CI/CD",
+      description: "Automated pipelines with GitHub Actions, Docker Swarm, and Kubernetes",
+      order: 3,
+    },
+    {
+      id: "hl5",
+      icon: "Code",
+      title: "Software Development",
+      description: "Full-stack development with Python, TypeScript, Go, and modern frameworks",
+      order: 4,
+    },
+    {
+      id: "hl6",
+      icon: "Shield",
+      title: "Security & Infrastructure",
+      description: "Zero-trust architecture, IaC with Terraform, and compliance automation",
+      order: 5,
+    },
+  ];
+
+  for (const hl of highlights) {
+    await prisma.highlight.upsert({
+      where: { id: hl.id },
+      update: {
+        icon: hl.icon,
+        title: hl.title,
+        description: hl.description,
+        order: hl.order,
+      },
+      create: hl,
+    });
+  }
+
+  console.log("✅ Highlights created/updated");
 }
 
 main()
