@@ -110,6 +110,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get ECR login token
+        id: ecr-token
+        run: echo "password=$(aws ecr get-login-password --region ${{ vars.AWS_REGION }})" >> $GITHUB_OUTPUT
+
       - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -125,7 +136,7 @@ jobs:
           host: ${{ secrets.SWARM_HOST }}
           username: ${{ secrets.SWARM_USER }}
           key: ${{ secrets.SWARM_SSH_KEY }}
-          envs: CUSTOMER_NAME,CLOUD_PROVIDER
+          envs: CUSTOMER_NAME
           script: |
             set -e
             ENV_SUFFIX="dev"
@@ -149,17 +160,11 @@ jobs:
             REPLICAS=1
             ENVEOF
 
-            # Registry Login on Server
-            if [[ "${{ env.CLOUD_PROVIDER }}" == "aws" ]]; then
-              aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}
-            else
-              echo "${{ secrets.ACR_PASSWORD }}" | docker login ${REGISTRY} -u ${{ secrets.ACR_USERNAME }} --password-stdin
-            fi
+            # Registry Login
+            echo "${{ steps.ecr-token.outputs.password }}" | docker login --username AWS --password-stdin ${REGISTRY}
 
             # Render and Deploy
             cat docker-compose.yml | sed "s|\${VERSION:-latest}|${VERSION}|g" | sed "s|\${REPLICAS:-1}|1|g" | envsubst '\$REGISTRY \$CUSTOMER_NAME \$DOMAIN' > docker-compose.rendered.yml
-            
-            # Simple replace for sensitive vars (Improvement: use the same python logic if needed)
             sed -i "s|\${DB_PASSWORD}|${{ secrets.DB_PASSWORD }}|g" docker-compose.rendered.yml
             sed -i "s|\${NEXTAUTH_SECRET}|${{ secrets.NEXTAUTH_SECRET }}|g" docker-compose.rendered.yml
 
@@ -175,6 +180,18 @@ jobs:
     environment: staging
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get ECR login token
+        id: ecr-token
+        run: echo "password=$(aws ecr get-login-password --region ${{ vars.AWS_REGION }})" >> $GITHUB_OUTPUT
+
       - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -183,13 +200,14 @@ jobs:
           key: ${{ secrets.SWARM_SSH_KEY }}
           source: "docker-compose.yml"
           target: "/tmp/${{ env.CUSTOMER_NAME }}"
+
       - name: Deploy to STAGING
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SWARM_HOST }}
           username: ${{ secrets.SWARM_USER }}
           key: ${{ secrets.SWARM_SSH_KEY }}
-          envs: CUSTOMER_NAME,CLOUD_PROVIDER
+          envs: CUSTOMER_NAME
           script: |
             set -e
             ENV_SUFFIX="staging"
@@ -212,11 +230,7 @@ jobs:
             REPLICAS=1
             ENVEOF
 
-            if [[ "${{ env.CLOUD_PROVIDER }}" == "aws" ]]; then
-              aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}
-            else
-              echo "${{ secrets.ACR_PASSWORD }}" | docker login ${REGISTRY} -u ${{ secrets.ACR_USERNAME }} --password-stdin
-            fi
+            echo "${{ steps.ecr-token.outputs.password }}" | docker login --username AWS --password-stdin ${REGISTRY}
 
             cat docker-compose.yml | sed "s|\${VERSION:-latest}|${VERSION}|g" | sed "s|\${REPLICAS:-1}|1|g" | envsubst '\$REGISTRY \$CUSTOMER_NAME \$DOMAIN' > docker-compose.rendered.yml
             sed -i "s|\${DB_PASSWORD}|${{ secrets.DB_PASSWORD }}|g" docker-compose.rendered.yml
@@ -234,6 +248,18 @@ jobs:
     environment: prod
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get ECR login token
+        id: ecr-token
+        run: echo "password=$(aws ecr get-login-password --region ${{ vars.AWS_REGION }})" >> $GITHUB_OUTPUT
+
       - name: Copy docker-compose.yml to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -249,7 +275,7 @@ jobs:
           host: ${{ secrets.SWARM_HOST }}
           username: ${{ secrets.SWARM_USER }}
           key: ${{ secrets.SWARM_SSH_KEY }}
-          envs: CUSTOMER_NAME,CLOUD_PROVIDER
+          envs: CUSTOMER_NAME
           script: |
             set -e
             ENV_SUFFIX="prod"
@@ -272,11 +298,7 @@ jobs:
             REPLICAS=2
             ENVEOF
 
-            if [[ "${{ env.CLOUD_PROVIDER }}" == "aws" ]]; then
-              aws ecr get-login-password --region ${{ vars.AWS_REGION }} | docker login --username AWS --password-stdin ${REGISTRY}
-            else
-              echo "${{ secrets.ACR_PASSWORD }}" | docker login ${REGISTRY} -u ${{ secrets.ACR_USERNAME }} --password-stdin
-            fi
+            echo "${{ steps.ecr-token.outputs.password }}" | docker login --username AWS --password-stdin ${REGISTRY}
 
             cat docker-compose.yml | sed "s|\${VERSION:-latest}|${VERSION}|g" | sed "s|\${REPLICAS:-1}|2|g" | envsubst '\$REGISTRY \$CUSTOMER_NAME \$DOMAIN' > docker-compose.rendered.yml
             sed -i "s|\${DB_PASSWORD}|${{ secrets.DB_PASSWORD }}|g" docker-compose.rendered.yml
