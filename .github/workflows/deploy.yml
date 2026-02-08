@@ -24,8 +24,8 @@ env:
   CUSTOMER_NAME: ${{ vars.CUSTOMER_NAME }}
   IMAGE_NAME: ${{ vars.CUSTOMER_NAME }}/app
   # Determine provider based on environment or global variable
-  # Default to azure if not specified
-  CLOUD_PROVIDER: ${{ vars.CLOUD_PROVIDER || 'azure' }}
+  # Default to aws if not specified
+  CLOUD_PROVIDER: ${{ vars.CLOUD_PROVIDER || 'aws' }}
 
 jobs:
   # ===========================================================================
@@ -56,6 +56,19 @@ jobs:
             echo "registry=${{ vars.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com" >> $GITHUB_OUTPUT
           else
             echo "registry=${{ vars.ACR_NAME }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine environment tag
+        id: env-tag
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/dev" ]]; then
+            echo "tag=dev" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
+            echo "tag=staging" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=prod" >> $GITHUB_OUTPUT
+          else
+            echo "tag=dev" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up Docker Buildx
@@ -92,7 +105,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ steps.registry.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-            ${{ steps.registry.outputs.registry }}/${{ env.IMAGE_NAME }}:latest
+            ${{ steps.registry.outputs.registry }}/${{ env.IMAGE_NAME }}:${{ steps.env-tag.outputs.tag }}
 
   # ===========================================================================
   # DEV Deployment
