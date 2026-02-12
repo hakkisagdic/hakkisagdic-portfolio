@@ -56,7 +56,7 @@ jobs:
           if [[ "$GITHUB_REF" == "refs/heads/dev" ]]; then
             echo "tag=dev" >> $GITHUB_OUTPUT
           elif [[ "$GITHUB_REF" == "refs/heads/staging" ]]; then
-            echo "tag=staging" >> $GITHUB_OUTPUT
+            echo "tag=stage" >> $GITHUB_OUTPUT
           elif [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "tag=prod" >> $GITHUB_OUTPUT
           else
